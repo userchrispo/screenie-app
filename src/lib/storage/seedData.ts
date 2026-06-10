@@ -4,9 +4,9 @@ export const seedItems: SavedItem[] = [
   {
     id: 'seed-pricing-screenshot',
     type: 'screenshot',
-    title: 'Pricing screenshot',
+    title: 'Pricing screenshot from last week',
     text: 'Pro $49 /mo Billed monthly',
-    extractedText: 'Simple transparent pricing. Starter $19. Pro $49. Team $99.',
+    extractedText: 'Simple transparent pricing. Starter $19. Pro $49. Team $99. Priority support.',
     tags: ['pricing', 'pro plan', 'screenshot'],
     isFavorite: true,
     status: 'active',
@@ -30,8 +30,8 @@ export const seedItems: SavedItem[] = [
   {
     id: 'seed-hero-image',
     type: 'image',
-    title: 'Landing page hero',
-    text: 'Filename contains pricing and the image was tagged pricing.',
+    title: 'Pricing hero image',
+    text: 'Filename contains pricing; tagged pricing.',
     tags: ['pricing', 'hero'],
     isFavorite: false,
     status: 'active',

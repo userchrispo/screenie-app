@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import {
   createSavedItem,
+  updateSavedItem,
   type CreateSavedItemInput,
   type SavedItem,
   type ScreenieRepository,
@@ -33,9 +34,7 @@ export const screenieRepository: ScreenieRepository = {
   async list() {
     await ensureSeeded();
     const db = await getDb();
-    return (await db.getAllFromIndex('items', 'by-created')).sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt)
-    );
+    return sortNewest(await db.getAll('items'));
   },
 
   async get(id) {
@@ -58,14 +57,25 @@ export const screenieRepository: ScreenieRepository = {
       throw new Error(`Saved item not found: ${id}`);
     }
 
-    const updated: SavedItem = {
-      ...existing,
-      ...input,
-      tags: input.tags ?? existing.tags,
-      updatedAt: new Date().toISOString()
-    };
+    const updated = updateSavedItem(existing, input);
     await db.put('items', updated);
     return updated;
+  },
+
+  async trash(id: string) {
+    return this.update(id, { status: 'trash' });
+  },
+
+  async restore(id: string) {
+    return this.update(id, { status: 'active' });
+  },
+
+  async toggleFavorite(id: string) {
+    const existing = await this.get(id);
+    if (!existing) {
+      throw new Error(`Saved item not found: ${id}`);
+    }
+    return this.update(id, { isFavorite: !existing.isFavorite });
   },
 
   async remove(id: string) {
@@ -78,6 +88,14 @@ export const screenieRepository: ScreenieRepository = {
     const transaction = db.transaction(['items', 'meta'], 'readwrite');
     await Promise.all(items.map((item) => transaction.objectStore('items').put(item)));
     await transaction.objectStore('meta').put({ key: 'seeded', value: 'true' });
+    await transaction.done;
+  },
+
+  async clear() {
+    const db = await getDb();
+    const transaction = db.transaction(['items', 'meta'], 'readwrite');
+    await transaction.objectStore('items').clear();
+    await transaction.objectStore('meta').clear();
     await transaction.done;
   }
 };
@@ -110,4 +128,8 @@ function getDb() {
   });
 
   return dbPromise;
+}
+
+function sortNewest(items: SavedItem[]): SavedItem[] {
+  return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
