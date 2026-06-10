@@ -5,8 +5,8 @@ const items: SavedItem[] = [
   {
     id: 'shot-pricing',
     type: 'screenshot',
-    title: 'Pricing screenshot',
-    text: 'Pro $49 /mo billed monthly',
+    title: 'Pricing screenshot from last week',
+    text: 'Pro $49 /mo Billed monthly',
     extractedText: 'Simple transparent pricing starter pro team',
     tags: ['pricing', 'pro plan', 'screenshot'],
     isFavorite: true,
@@ -25,6 +25,17 @@ const items: SavedItem[] = [
     status: 'active',
     createdAt: '2024-05-07T15:15:00.000Z',
     updatedAt: '2024-05-07T15:15:00.000Z'
+  },
+  {
+    id: 'hero-image',
+    type: 'image',
+    title: 'Pricing hero image',
+    text: 'Filename contains pricing; tagged pricing.',
+    tags: ['pricing', 'hero'],
+    isFavorite: false,
+    status: 'active',
+    createdAt: '2024-05-06T09:31:00.000Z',
+    updatedAt: '2024-05-06T09:31:00.000Z'
   },
   {
     id: 'trash-note',
@@ -47,8 +58,41 @@ describe('searchSavedItems', () => {
       sortBy: 'best-match'
     });
 
-    expect(results.map((result) => result.item.id)).toEqual(['shot-pricing', 'link-pricing']);
-    expect(results[0].matchedText).toContain('Pro $49');
+    expect(results.map((result) => result.item.id)).toEqual(['shot-pricing', 'link-pricing', 'hero-image']);
+    expect(results[0]).toMatchObject({
+      matchKind: 'text',
+      matchedText: 'Pro $49 /mo Billed monthly',
+      matchedTags: ['pricing', 'pro plan']
+    });
+    expect(results[0].matchSummary).toContain('Matched text');
+  });
+
+  it('handles natural screenshot search wording with stop words', () => {
+    const results = searchSavedItems(items, {
+      text: 'that pricing screenshot from last week',
+      filter: 'library',
+      sortBy: 'best-match',
+      limit: 3
+    });
+
+    expect(results.map((result) => result.item.id)).toEqual(['shot-pricing', 'hero-image', 'link-pricing']);
+    expect(results[0].matchedTerms).toEqual(expect.arrayContaining(['pricing', 'screenshot']));
+  });
+
+  it('supports type and tag filters for narrowed result sets', () => {
+    const results = searchSavedItems(items, {
+      text: 'pricing',
+      filter: 'tags',
+      sortBy: 'newest',
+      tags: ['hero'],
+      types: ['image']
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      item: { id: 'hero-image' },
+      matchedTags: ['pricing']
+    });
   });
 
   it('can filter trash separately', () => {
@@ -60,5 +104,15 @@ describe('searchSavedItems', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].item.id).toBe('trash-note');
+  });
+
+  it('sorts empty searches without requiring a text match', () => {
+    const results = searchSavedItems(items, {
+      text: '',
+      filter: 'inbox',
+      sortBy: 'oldest'
+    });
+
+    expect(results.map((result) => result.item.id)).toEqual(['hero-image', 'link-pricing', 'shot-pricing']);
   });
 });
