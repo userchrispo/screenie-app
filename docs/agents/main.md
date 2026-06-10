@@ -11,9 +11,11 @@
 - Added shared saved-item contracts, IndexedDB repository, seed data, and search.
 - Built Inbox, capture flows, Find, filters, favorites, trash, responsive shell, and local persistence.
 - Added unit/component and Playwright coverage for core MVP flows.
+- Pushed `main` to `origin/main`.
 
 ## Blocked
-- Helper branches are still running or waiting in their own sandboxes.
+- Frontend helper branch has uncommitted work from the older base commit.
+- Search/data and quality helper branches completed cleanly, but they started before the integrated MVP and should be reviewed/cherry-picked rather than merged wholesale.
 
 ## Next
 - Review helper branches when they finish, cherry-pick or merge useful non-conflicting improvements, then retire worktrees.
