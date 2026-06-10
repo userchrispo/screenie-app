@@ -1,26 +1,37 @@
 # Quality Engineer Status
 
 ## Now
-- Added executable smoke coverage for the current placeholder app and pending MVP flow specs for later implementation.
+- Synced `feature/quality-e2e` with `origin/main` MVP and enabled gap-filling e2e plus component tests.
 
 ## Done
-- Read AGENTS.md, DESIGN.md, screenshot references, App test, Playwright config, and current quality status.
-- Added Playwright foundation smoke coverage that checks app load and console errors.
-- Added skipped Playwright specs for critical MVP flows blocked on UI implementation.
-- Added a quality coverage plan under `src/test/`.
+- Merged `origin/main` (MVP at `8c9ca97`) into `feature/quality-e2e` without blind conflict resolution.
+- Verification: `npm test` 11 passed; `npm run e2e` 7 passed; `npm run lint` passed.
+- Added shared Playwright storage reset helper at `e2e/helpers/resetStorage.ts`.
+- Updated foundation smoke for Inbox shell and console-error guard.
+- Unskipped quality gap e2e: seeded search/sort/count, sidebar Favorites/Trash, top-bar search routing.
+- Added component tests for `CapturePanel` and `FindView` under `src/test/features/`.
+- Updated `src/test/quality-coverage-plan.md` with executable vs blocked coverage.
 
 ## Blocked
-- Full Inbox, capture, search, filter, persistence, and accessibility flow tests are skipped until the frontend/data branches expose the MVP UI controls and text.
+- Image capture e2e (file input / drag-drop).
+- Stub UI controls (`Integrations`, `Templates`, `Notifications`, `Settings`, `Filter items`, `All items`).
+- Visual regression vs product PNG references.
+- Favorite-toggle dedicated e2e (next slice).
 
 ## Next
-- After implementation lands, unskip `e2e/screenie-mvp-flows.spec.ts`, align selectors to final accessible names, and add component-level tests for capture/search controls.
+- Add image upload e2e once a stable file-fixture pattern is chosen.
+- Add favorites toggle e2e and Library/Tags view assertions.
+- Introduce responsive snapshot checks after stub controls ship.
 
 ## Files touched
+- `e2e/helpers/resetStorage.ts`
 - `e2e/screenie-foundation.spec.ts`
 - `e2e/screenie-mvp-flows.spec.ts`
+- `src/test/features/CapturePanel.test.tsx`
+- `src/test/features/FindView.test.tsx`
 - `src/test/quality-coverage-plan.md`
 - `docs/agents/quality.md`
 
 ## Needs from others
-- Frontend branch should provide semantic buttons/links/searchbox labels matching the MVP specs where possible.
-- Search/data branch should ensure seeded pricing data is available in the UI before unskipping find-flow tests.
+- Frontend should wire stub nav/toolbar buttons before those flows can be tested.
+- Main thread should merge `feature/quality-e2e` after verification; `e2e/screenie.spec.ts` from main is retained unchanged.

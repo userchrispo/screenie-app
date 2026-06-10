@@ -8,8 +8,13 @@ if (isVitest) {
   });
 } else {
   const { expect, test } = await import('@playwright/test');
+  const { resetStorage } = await import('./helpers/resetStorage');
 
   test.describe('Screenie foundation', () => {
+    test.beforeEach(async ({ page }) => {
+      await resetStorage(page);
+    });
+
     test('loads the app shell without console errors', async ({ page }) => {
       const consoleErrors: string[] = [];
       page.on('console', (message) => {
@@ -18,11 +23,9 @@ if (isVitest) {
         }
       });
 
-      await page.goto('/');
-
       await expect(page.getByRole('main', { name: /screenie app/i })).toBeVisible();
-      await expect(page.getByRole('heading', { name: /your saved content/i })).toBeVisible();
-      await expect(page.getByText(/local-first app foundation is ready/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /capture anything/i })).toBeVisible();
       expect(consoleErrors).toEqual([]);
     });
   });
