@@ -1538,6 +1538,7 @@ img {
     border-right: 0;
     border-bottom: 1px solid var(--border);
     gap: var(--spacing-12);
+    overflow: visible;
   }
 
   .brand {
@@ -1551,9 +1552,10 @@ img {
 
   .sidebar-scroll {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     max-height: none;
-    overflow-x: auto;
+    overflow-x: visible;
     overflow-y: visible;
     gap: var(--spacing-8);
     padding-right: 0;
@@ -1566,19 +1568,15 @@ img {
     display: none;
   }
 
-  .nav-section {
+  .nav-section,
+  .nav-rail {
     display: contents;
   }
 
   .nav-rail {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: var(--spacing-8);
     padding: 0;
     border: 0;
     background: transparent;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
 
   .nav-rail::-webkit-scrollbar {
@@ -1587,7 +1585,8 @@ img {
 
   .nav-item {
     width: auto;
-    flex-shrink: 0;
+    flex: 0 1 auto;
+    max-width: 100%;
     min-height: 36px;
     padding: 0 var(--spacing-12);
     white-space: nowrap;

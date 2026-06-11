@@ -6,7 +6,7 @@ import type {
   SavedItem,
   UpdateSavedItemInput
 } from '../../domain/savedItem';
-import { ensureSeeded, screenieRepository } from '../../lib/storage/screenieRepository';
+import { screenieRepository } from '../../lib/storage/screenieRepository';
 
 export function useSavedItems() {
   const [items, setItems] = useState<SavedItem[]>([]);
@@ -73,7 +73,6 @@ export function useSavedItems() {
 
   const clearAll = useCallback(async () => {
     await screenieRepository.clear();
-    await ensureSeeded();
     await reload();
   }, [reload]);
 

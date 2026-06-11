@@ -82,12 +82,18 @@ export function CapturePanel({
       return;
     }
 
-    const url = normalizeUrl(linkValue);
+    const parsedUrl = parseUrl(linkValue);
+    if (!parsedUrl) {
+      setMessage('Enter a valid URL.');
+      return;
+    }
+
+    const url = parsedUrl.toString();
     await onCreate({
       type: 'link',
-      title: titleFromUrl(url),
+      title: titleFromUrl(parsedUrl),
       url,
-      text: `Saved link from ${new URL(url).hostname}`,
+      text: `Saved link from ${parsedUrl.hostname}`,
       tags: ['link'],
       thumbnailColor: 'link'
     });
@@ -310,8 +316,21 @@ function normalizeUrl(value: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-function titleFromUrl(value: string): string {
-  const url = new URL(value);
+function parseUrl(value: string): URL | null {
+  const normalized = normalizeUrl(value);
+  if (/\s/.test(normalized)) {
+    return null;
+  }
+
+  try {
+    const url = new URL(normalized);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function titleFromUrl(url: URL): string {
   return url.hostname.replace(/^www\./, '');
 }
 

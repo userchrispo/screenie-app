@@ -55,6 +55,19 @@ describe('CapturePanel', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Link saved.');
   });
 
+  it('rejects malformed links without creating an item', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn().mockResolvedValue(undefined);
+    render(<CapturePanel onCreate={onCreate} />);
+
+    await expandLinkTile(user);
+    await user.type(screen.getByLabelText('Paste link'), 'not a real url');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onCreate).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Enter a valid URL.');
+  });
+
   it('saves a snippet and shows confirmation', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn().mockResolvedValue(undefined);

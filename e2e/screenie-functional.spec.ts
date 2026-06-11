@@ -80,3 +80,48 @@ test('uploads an image and finds it in search', async ({ page }) => {
   await page.getByLabel('Search everything in Screenie').fill('pricing-screen');
   await expect(page.getByRole('heading', { name: 'pricing-screen' })).toBeVisible();
 });
+
+test('clear all data keeps the workspace empty after reload', async ({ page }) => {
+  page.on('dialog', (dialog) => dialog.accept());
+
+  await page.getByLabel('Settings', { exact: true }).click();
+  await page.getByRole('button', { name: 'Clear all data' }).click();
+
+  await page.reload();
+
+  await expect(page.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+  await expect(page.getByText('Save your first link, screenshot, or snippet above.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'User onboarding flow' })).not.toBeVisible();
+});
+
+test('malformed link capture shows validation without console errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      errors.push(message.text());
+    }
+  });
+
+  await page.getByRole('button', { name: /Paste link/i }).click();
+  await page.getByLabel('Paste link').fill('not a real url');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+  await expect(page.getByRole('region', { name: 'Capture saved content' }).getByRole('status')).toHaveText(
+    'Enter a valid URL.'
+  );
+  expect(errors).toEqual([]);
+});
+
+for (const width of [320, 390]) {
+  test(`mobile navigation keeps items within viewport at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.reload();
+
+    for (const name of ['Inbox', 'Find', 'Library', 'Favorites', 'Tags', 'Trash', 'Integrations', 'Templates', 'Settings']) {
+      const box = await page.getByRole('button', { name: new RegExp(name) }).boundingBox();
+      expect(box, `${name} should be visible`).not.toBeNull();
+      expect(box!.x, `${name} should not clip left`).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width, `${name} should not clip right`).toBeLessThanOrEqual(width);
+    }
+  });
+}

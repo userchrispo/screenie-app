@@ -37,6 +37,8 @@ interface ScreenieDb extends DBSchema {
 
 const DB_NAME = 'screenie-local';
 const DB_VERSION = 2;
+const META_SEEDED_KEY = 'seeded';
+const META_DEMO_DISABLED_KEY = 'demo-seed-disabled';
 
 let dbPromise: Promise<IDBPDatabase<ScreenieDb>> | undefined;
 
@@ -137,25 +139,38 @@ export const screenieRepository: ScreenieRepository = {
   async seed(items: SavedItem[], projects: Project[] = seedProjects) {
     const db = await getDb();
     const transaction = db.transaction(['items', 'projects', 'meta'], 'readwrite');
+    const meta = transaction.objectStore('meta');
+
     await Promise.all(items.map((item) => transaction.objectStore('items').put(item)));
     await Promise.all(projects.map((project) => transaction.objectStore('projects').put(project)));
-    await transaction.objectStore('meta').put({ key: 'seeded', value: 'true' });
+    await meta.put({ key: META_SEEDED_KEY, value: 'true' });
+    await meta.delete(META_DEMO_DISABLED_KEY);
     await transaction.done;
   },
 
   async clear() {
     const db = await getDb();
     const transaction = db.transaction(['items', 'projects', 'meta'], 'readwrite');
+    const meta = transaction.objectStore('meta');
+
     await transaction.objectStore('items').clear();
     await transaction.objectStore('projects').clear();
-    await transaction.objectStore('meta').clear();
+    await meta.clear();
+    await meta.put({ key: META_SEEDED_KEY, value: 'true' });
+    await meta.put({ key: META_DEMO_DISABLED_KEY, value: 'true' });
     await transaction.done;
   }
 };
 
 export async function ensureSeeded() {
   const db = await getDb();
-  const seeded = await db.get('meta', 'seeded');
+  const demoDisabled = await db.get('meta', META_DEMO_DISABLED_KEY);
+
+  if (demoDisabled?.value === 'true') {
+    return;
+  }
+
+  const seeded = await db.get('meta', META_SEEDED_KEY);
 
   if (seeded?.value !== 'true') {
     await screenieRepository.seed(seedItems, seedProjects);
