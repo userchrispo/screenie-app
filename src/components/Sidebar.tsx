@@ -1,17 +1,21 @@
 import {
   Bookmark,
-  Box,
+  ChevronDown,
   Folder,
   Inbox,
   LayoutTemplate,
+  Plus,
   Puzzle,
+  Search,
+  Settings,
   Sparkles,
   Star,
   Tags,
   Trash2,
   type LucideIcon
 } from 'lucide-react';
-import type { ScreenieFilter } from '../domain/savedItem';
+import type { Project, ScreenieView } from '../domain/savedItem';
+import { SectionLabel } from './SectionLabel';
 
 export interface SidebarCounts {
   inbox: number;
@@ -19,30 +23,77 @@ export interface SidebarCounts {
   favorites: number;
   tags: number;
   trash: number;
+  projects: number;
 }
 
 interface SidebarProps {
-  activeView: ScreenieFilter | 'find';
+  activeView: ScreenieView;
   counts: SidebarCounts;
-  onNavigate: (view: ScreenieFilter | 'find') => void;
+  projects: Project[];
+  activeProjectId: string | null;
+  onNavigate: (view: ScreenieView) => void;
+  onSelectProject: (projectId: string) => void;
+  onClearProject: () => void;
+  onAddProject: (name: string) => void;
 }
 
 interface NavItem {
-  id: ScreenieFilter | 'find';
+  id: ScreenieView;
   label: string;
   icon: LucideIcon;
   count?: number;
 }
 
-export function Sidebar({ activeView, counts, onNavigate }: SidebarProps) {
-  const primaryItems: NavItem[] = [
-    { id: 'inbox', label: 'Inbox', icon: Inbox, count: counts.inbox },
-    { id: 'find', label: 'Find', icon: Box },
-    { id: 'library', label: 'Library', icon: Bookmark },
-    { id: 'favorites', label: 'Favorites', icon: Star },
-    { id: 'tags', label: 'Tags', icon: Tags },
-    { id: 'trash', label: 'Trash', icon: Trash2, count: counts.trash }
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+export function Sidebar({
+  activeView,
+  counts,
+  projects,
+  activeProjectId,
+  onNavigate,
+  onSelectProject,
+  onClearProject,
+  onAddProject
+}: SidebarProps) {
+  const isFind = activeView === 'find';
+
+  const sections: NavSection[] = [
+    {
+      label: 'Main',
+      items: [
+        { id: 'inbox', label: 'Inbox', icon: Inbox, count: counts.inbox },
+        { id: 'find', label: 'Find', icon: Search }
+      ]
+    },
+    {
+      label: 'Browse',
+      items: [
+        { id: 'library', label: 'Library', icon: Bookmark, count: counts.library },
+        { id: 'favorites', label: 'Favorites', icon: Star, count: counts.favorites },
+        { id: 'tags', label: 'Tags', icon: Tags, count: counts.tags },
+        { id: 'trash', label: 'Trash', icon: Trash2, count: counts.trash }
+      ]
+    },
+    {
+      label: 'Workspace',
+      items: [
+        { id: 'integrations', label: 'Integrations', icon: Puzzle },
+        { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+        { id: 'settings', label: 'Settings', icon: Settings }
+      ]
+    }
   ];
+
+  function handleAddProject() {
+    const name = window.prompt('Project name');
+    if (name?.trim()) {
+      onAddProject(name.trim());
+    }
+  }
 
   return (
     <aside className="sidebar" aria-label="Primary navigation">
@@ -53,44 +104,85 @@ export function Sidebar({ activeView, counts, onNavigate }: SidebarProps) {
         <span>Screenie</span>
       </button>
 
-      <nav className="nav-group" aria-label="Saved content">
-        {primaryItems.map((item) => (
-          <SidebarButton
-            key={item.id}
-            item={item}
-            isActive={activeView === item.id}
-            onClick={() => onNavigate(item.id)}
-          />
+      <button
+        type="button"
+        className="workspace-pill"
+        aria-label="Local workspace settings"
+        onClick={() => onNavigate('settings')}
+      >
+        <span className="workspace-pill__avatar" aria-hidden="true">
+          S
+        </span>
+        <span className="workspace-pill__copy">
+          <strong>Local workspace</strong>
+          <span>
+            {counts.library} saves · {counts.projects} projects
+          </span>
+        </span>
+        <ChevronDown size={18} strokeWidth={1.5} aria-hidden="true" />
+      </button>
+
+      <div className="sidebar-scroll">
+        {sections.map((section) => (
+          <nav key={section.label} className="nav-section" aria-label={section.label}>
+            <SectionLabel>{section.label}</SectionLabel>
+            <div className="nav-group nav-rail">
+              {section.items.map((item) => (
+                <SidebarButton
+                  key={item.id}
+                  item={item}
+                  isActive={activeView === item.id}
+                  onClick={() => onNavigate(item.id)}
+                />
+              ))}
+            </div>
+          </nav>
         ))}
-      </nav>
 
-      <nav className="nav-group sidebar-secondary" aria-label="Workspace tools">
-        <button className="nav-item" type="button">
-          <Puzzle size={20} aria-hidden="true" />
-          <span>Integrations</span>
-        </button>
-        <button className="nav-item" type="button">
-          <LayoutTemplate size={20} aria-hidden="true" />
-          <span>Templates</span>
-        </button>
-      </nav>
-
-      <div className="quick-card" aria-label="Quick save shortcut">
-        <Sparkles size={18} aria-hidden="true" />
-        <div>
-          <strong>Quick save</strong>
-          <span>Ctrl + Shift + S</span>
-        </div>
+        {isFind ? (
+          <div key="find-context" className="sidebar-context">
+            <section className="sidebar-projects" aria-labelledby="projects-title">
+              <div className="sidebar-projects__title" id="projects-title">
+                <span className="icon-slot">
+                  <Folder size={18} strokeWidth={1.5} aria-hidden="true" />
+                </span>
+                <span>Projects</span>
+                <button type="button" aria-label="Add project" onClick={handleAddProject}>
+                  <Plus size={18} strokeWidth={1.5} aria-hidden="true" />
+                </button>
+              </div>
+              <ul>
+                {activeProjectId ? (
+                  <li>
+                    <button type="button" className="sidebar-projects__clear" onClick={onClearProject}>
+                      All projects
+                    </button>
+                  </li>
+                ) : null}
+                {projects.map((project) => (
+                  <li key={project.id}>
+                    <button
+                      type="button"
+                      aria-current={activeProjectId === project.id ? 'true' : undefined}
+                      className={activeProjectId === project.id ? 'is-active' : undefined}
+                      onClick={() => onSelectProject(project.id)}
+                    >
+                      {project.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        ) : null}
       </div>
 
-      <div className="team-card">
-        <span className="avatar" aria-hidden="true">A</span>
-        <div>
-          <strong>Acme Team</strong>
-          <span>Pro Plan</span>
-        </div>
-        <Folder size={18} aria-hidden="true" />
-      </div>
+      <p className="sidebar-quick-save" aria-label="Quick save shortcut">
+        <Sparkles size={16} strokeWidth={1.5} aria-hidden="true" />
+        <span>
+          Quick save <kbd>Ctrl + Shift + S</kbd>
+        </span>
+      </p>
     </aside>
   );
 }
@@ -108,14 +200,16 @@ function SidebarButton({
 
   return (
     <button
-      className="nav-item"
+      className={`nav-item${isActive ? ' nav-item--active' : ''}`}
       type="button"
       onClick={onClick}
       aria-current={isActive ? 'page' : undefined}
     >
-      <Icon size={20} aria-hidden="true" />
-      <span>{item.label}</span>
-      {typeof item.count === 'number' && <span className="nav-count">{item.count}</span>}
+      <span className="icon-slot">
+        <Icon size={18} strokeWidth={1.5} aria-hidden="true" />
+      </span>
+      <span className="nav-item__label">{item.label}</span>
+      {typeof item.count === 'number' ? <span className="nav-count">{item.count}</span> : null}
     </button>
   );
 }

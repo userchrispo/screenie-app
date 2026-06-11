@@ -1,13 +1,34 @@
-import { useMemo, useState } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
+import { PageHeader } from './components/PageHeader';
 import { SavedItemCard } from './components/SavedItemCard';
-import type { SavedItem, ScreenieFilter, ScreenieSort } from './domain/savedItem';
+import { SurfaceCard } from './components/SurfaceCard';
+import { FilterMenu } from './components/FilterMenu';
+import { ViewTransition } from './components/ViewTransition';
+import type { SavedItem, SavedItemType, ScreenieFilter, ScreenieSort, ScreenieView } from './domain/savedItem';
+import { normalizeTags } from './domain/savedItem';
 import { FindView } from './features/find/FindView';
 import { InboxView } from './features/inbox/InboxView';
+import { LibraryView } from './features/library/LibraryView';
+import { TagsView } from './features/tags/TagsView';
+import { ItemDetailPanel } from './features/item/ItemDetailPanel';
+import { NotificationsPanel } from './features/notifications/NotificationsPanel';
+import { IntegrationsView } from './features/integrations/IntegrationsView';
+import { TemplatesView } from './features/templates/TemplatesView';
+import { SettingsView } from './features/settings/SettingsView';
+import type { CaptureTemplate } from './features/templates/templatesData';
 import { useSavedItems } from './features/screenie/useSavedItems';
 import { searchSavedItems } from './lib/search/searchSavedItems';
+import { isModKey } from './lib/keyboardShortcuts';
+
+const filterSubtitles: Record<ScreenieFilter, string> = {
+  inbox: 'Uncategorized saves land here before you assign a project.',
+  library: 'Every saved item across your workspace.',
+  favorites: 'Items you marked as favorites.',
+  tags: 'Browse saved content by tag.',
+  trash: 'Items moved to trash stay here until restored or deleted.'
+};
 
 const filterTitles: Record<ScreenieFilter, string> = {
   inbox: 'Inbox',
@@ -17,25 +38,112 @@ const filterTitles: Record<ScreenieFilter, string> = {
   trash: 'Trash'
 };
 
+function isBrowseFilter(view: ScreenieView): view is ScreenieFilter {
+  return view !== 'find' && view !== 'integrations' && view !== 'templates' && view !== 'settings';
+}
+
 export function App() {
-  const [activeView, setActiveView] = useState<ScreenieFilter | 'find'>('inbox');
+  const [activeView, setActiveView] = useState<ScreenieView>('inbox');
   const [searchText, setSearchText] = useState('');
   const [sortBy, setSortBy] = useState<ScreenieSort>('best-match');
-  const { items, counts, isLoading, error, createItem, updateItem } = useSavedItems();
+  const [typeFilter, setTypeFilter] = useState<SavedItemType[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [captureTemplate, setCaptureTemplate] = useState<CaptureTemplate | null>(null);
+  const [captureFocusToken, setCaptureFocusToken] = useState(0);
+  const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
 
-  const activeFilter: ScreenieFilter = activeView === 'find' ? 'inbox' : activeView;
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const {
+    items,
+    projects,
+    counts,
+    isLoading,
+    error,
+    createItem,
+    updateItem,
+    deleteItem,
+    createProject,
+    clearAll
+  } = useSavedItems();
+
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>();
+    for (const item of items) {
+      if (item.status === 'active') {
+        for (const tag of item.tags) {
+          tags.add(tag);
+        }
+      }
+    }
+    return Array.from(tags).sort();
+  }, [items]);
+
+  const selectedItem = useMemo(
+    () => items.find((item) => item.id === selectedItemId) ?? null,
+    [items, selectedItemId]
+  );
+
+  const activeFilter: ScreenieFilter = activeView === 'find' ? 'library' : isBrowseFilter(activeView) ? activeView : 'library';
+
   const filteredResults = useMemo(
     () =>
       searchSavedItems(items, {
         text: '',
         filter: activeFilter,
-        sortBy: sortBy === 'best-match' ? 'newest' : sortBy
+        sortBy: sortBy === 'best-match' ? 'newest' : sortBy,
+        types: typeFilter.length > 0 ? typeFilter : undefined,
+        tags: tagFilter.length > 0 ? tagFilter : undefined,
+        projectId: projectId ?? undefined
       }),
-    [activeFilter, items, sortBy]
+    [activeFilter, items, projectId, sortBy, tagFilter, typeFilter]
   );
+
+  const closeOverlays = useCallback(() => {
+    setSelectedItemId(null);
+    setNotificationsOpen(false);
+    setFilterOpen(false);
+  }, []);
 
   function focusSearch() {
     setActiveView('find');
+    setPendingSearchFocus(true);
+  }
+
+  function focusCapture() {
+    setActiveView('inbox');
+    setCaptureFocusToken((value) => value + 1);
+  }
+
+  function clearFilters() {
+    setTypeFilter([]);
+    setTagFilter([]);
+  }
+
+  function handleNavigate(view: ScreenieView) {
+    if (view !== 'find') {
+      setProjectId(null);
+    }
+    setActiveView(view);
+  }
+
+  function handleTagClick(tag: string) {
+    setTagFilter([tag]);
+    setActiveView('tags');
+  }
+
+  function handleSelectProject(id: string) {
+    setProjectId(id);
+    setActiveView('find');
+  }
+
+  function handleSelectTemplate(template: CaptureTemplate) {
+    setCaptureTemplate(template);
+    setActiveView('inbox');
+    setCaptureFocusToken((value) => value + 1);
   }
 
   async function toggleFavorite(item: SavedItem) {
@@ -50,80 +158,229 @@ export function App() {
     await updateItem(item.id, { status: 'active' });
   }
 
+  async function deletePermanently(item: SavedItem) {
+    if (window.confirm(`Delete "${item.title}" permanently?`)) {
+      await deleteItem(item.id);
+      if (selectedItemId === item.id) {
+        setSelectedItemId(null);
+      }
+    }
+  }
+
+  async function saveItemDetail(
+    id: string,
+    input: { title: string; tags: string; projectId: string | null }
+  ) {
+    await updateItem(id, {
+      title: input.title,
+      tags: normalizeTags(input.tags.split(',').map((tag) => tag.trim())),
+      projectId: input.projectId
+    });
+  }
+
+  async function handleClearAll() {
+    await clearAll();
+    closeOverlays();
+  }
+
+  useEffect(() => {
+    if (pendingSearchFocus && activeView === 'find') {
+      searchInputRef.current?.focus();
+      setPendingSearchFocus(false);
+    }
+  }, [activeView, pendingSearchFocus]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        if (selectedItemId) {
+          setSelectedItemId(null);
+          return;
+        }
+        if (notificationsOpen || filterOpen) {
+          closeOverlays();
+        }
+      }
+
+      if (isModKey(event) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        focusSearch();
+        return;
+      }
+
+      if (isModKey(event) && event.shiftKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        focusCapture();
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [closeOverlays, filterOpen, notificationsOpen, selectedItemId]);
+
+  const cardHandlers = {
+    onToggleFavorite: (item: SavedItem) => void toggleFavorite(item),
+    onMoveToTrash: (item: SavedItem) => void moveToTrash(item),
+    onRestore: (item: SavedItem) => void restoreItem(item),
+    onOpenDetail: (item: SavedItem) => setSelectedItemId(item.id),
+    onTagClick: handleTagClick,
+    onDeletePermanently: (item: SavedItem) => void deletePermanently(item)
+  };
+
+  const filterProps = {
+    typeFilter,
+    tagFilter,
+    availableTags,
+    filterOpen,
+    onFilterOpenChange: setFilterOpen,
+    onTypeFilterChange: setTypeFilter,
+    onTagFilterChange: setTagFilter,
+    onClearFilters: clearFilters
+  };
+
   return (
-    <div className="screenie-shell">
-      <Sidebar activeView={activeView} counts={counts} onNavigate={setActiveView} />
-      <main className="app-main" aria-label="Screenie app">
-        <TopBar
-          searchText={searchText}
-          onSearchTextChange={setSearchText}
-          onFocusSearch={focusSearch}
+    <div className="app-frame">
+      <div className="screenie-shell">
+        <Sidebar
+          activeView={activeView}
+          counts={counts}
+          projects={projects}
+          activeProjectId={projectId}
+          onNavigate={handleNavigate}
+          onSelectProject={handleSelectProject}
+          onClearProject={() => setProjectId(null)}
+          onAddProject={(name) => void createProject({ name })}
         />
+        <main className="app-main" aria-label="Screenie app">
+          <div className="main-inner">
+            <TopBar
+              activeView={activeView}
+              searchText={searchText}
+              searchInputRef={searchInputRef}
+              onSearchTextChange={setSearchText}
+              onFocusSearch={focusSearch}
+              onNavigateHome={() => setActiveView('inbox')}
+              onOpenNotifications={() => setNotificationsOpen(true)}
+              onNavigateSettings={() => setActiveView('settings')}
+              onOpenFilter={() => setFilterOpen(true)}
+            />
 
-        {error && (
-          <div className="error-banner" role="alert">
-            {error}
-          </div>
-        )}
-
-        {activeView === 'inbox' ? (
-          <InboxView
-            items={items}
-            isLoading={isLoading}
-            onCreate={createItem}
-            onToggleFavorite={(item) => void toggleFavorite(item)}
-            onMoveToTrash={(item) => void moveToTrash(item)}
-            onRestore={(item) => void restoreItem(item)}
-          />
-        ) : activeView === 'find' ? (
-          <FindView
-            items={items}
-            filter="inbox"
-            searchText={searchText}
-            sortBy={sortBy}
-            onSearchTextChange={setSearchText}
-            onSortChange={setSortBy}
-            onToggleFavorite={(item) => void toggleFavorite(item)}
-            onMoveToTrash={(item) => void moveToTrash(item)}
-            onRestore={(item) => void restoreItem(item)}
-          />
-        ) : (
-          <section className="content-section saved-view" aria-labelledby="saved-view-title">
-            <div className="section-header">
-              <div>
-                <h1 id="saved-view-title">{filterTitles[activeView]}</h1>
-                <p>
-                  {filteredResults.length} {filteredResults.length === 1 ? 'item' : 'items'} in this view.
-                </p>
+            {error ? (
+              <div className="error-banner" role="alert">
+                {error}
               </div>
-              <button className="ghost-button" type="button">
-                <SlidersHorizontal size={18} aria-hidden="true" />
-                All items
-              </button>
-            </div>
+            ) : null}
 
-            {filteredResults.length > 0 ? (
-              <div className="item-list">
-                {filteredResults.map((result) => (
-                  <SavedItemCard
-                    key={result.item.id}
-                    item={result.item}
-                    matchedText={result.matchedText}
-                    onToggleFavorite={(item) => void toggleFavorite(item)}
-                    onMoveToTrash={(item) => void moveToTrash(item)}
-                    onRestore={(item) => void restoreItem(item)}
+            <ViewTransition viewKey={activeView}>
+              {activeView === 'inbox' ? (
+                <InboxView
+                  items={items}
+                  isLoading={isLoading}
+                  {...filterProps}
+                  onCreate={createItem}
+                  initialCaptureMode={captureTemplate?.mode ?? null}
+                  initialSnippet={captureTemplate?.mode === 'snippet' ? captureTemplate.body : ''}
+                  initialLink={captureTemplate?.mode === 'link' ? captureTemplate.body : ''}
+                  captureFocusToken={captureFocusToken}
+                  {...cardHandlers}
+                />
+              ) : activeView === 'find' ? (
+                <FindView
+                  items={items}
+                  filter="library"
+                  searchText={searchText}
+                  sortBy={sortBy}
+                  typeFilter={typeFilter}
+                  tagFilter={tagFilter}
+                  projectId={projectId ?? undefined}
+                  searchInputRef={searchInputRef}
+                  onSearchTextChange={setSearchText}
+                  onSortChange={setSortBy}
+                  {...cardHandlers}
+                />
+              ) : activeView === 'library' ? (
+                <LibraryView
+                  items={items}
+                  sortBy={sortBy}
+                  {...filterProps}
+                  {...cardHandlers}
+                />
+              ) : activeView === 'tags' ? (
+                <TagsView items={items} sortBy={sortBy} {...filterProps} {...cardHandlers} />
+              ) : activeView === 'integrations' ? (
+                <IntegrationsView />
+              ) : activeView === 'templates' ? (
+                <TemplatesView onSelectTemplate={handleSelectTemplate} />
+              ) : activeView === 'settings' ? (
+                <SettingsView onClearAll={handleClearAll} />
+              ) : (
+                <div className="saved-view page-stack">
+                  <PageHeader
+                    titleId="saved-view-title"
+                    title={filterTitles[activeView]}
+                    subtitle={filterSubtitles[activeView]}
+                    actions={
+                      <FilterMenu
+                        open={filterOpen}
+                        typeFilter={typeFilter}
+                        tagFilter={tagFilter}
+                        availableTags={availableTags}
+                        onOpenChange={setFilterOpen}
+                        onTypeFilterChange={setTypeFilter}
+                        onTagFilterChange={setTagFilter}
+                        onClear={clearFilters}
+                      />
+                    }
                   />
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <h2>Nothing here yet.</h2>
-                <p>Saved content will appear here once it matches this view.</p>
-              </div>
-            )}
-          </section>
-        )}
-      </main>
+                  <SurfaceCard as="section" className="content-section" aria-labelledby="saved-view-title">
+                    <p className="text-muted saved-view__meta">
+                      {filteredResults.length} {filteredResults.length === 1 ? 'item' : 'items'} in this view.
+                    </p>
+
+                    {filteredResults.length > 0 ? (
+                      <div className="item-list">
+                        {filteredResults.map((result) => (
+                          <SavedItemCard
+                            key={result.item.id}
+                            item={result.item}
+                            matchedText={result.matchedText}
+                            matchSummary={result.matchSummary}
+                            {...cardHandlers}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <h2>Nothing here yet.</h2>
+                        <p>Saved content will appear here once it matches this view.</p>
+                      </div>
+                    )}
+                  </SurfaceCard>
+                </div>
+              )}
+            </ViewTransition>
+          </div>
+        </main>
+      </div>
+
+      <ItemDetailPanel
+        item={selectedItem}
+        projects={projects}
+        onClose={() => setSelectedItemId(null)}
+        onSave={saveItemDetail}
+        onToggleFavorite={(item) => void toggleFavorite(item)}
+        onMoveToTrash={(item) => void moveToTrash(item)}
+        onDeletePermanently={(item) => void deletePermanently(item)}
+      />
+      <NotificationsPanel
+        open={notificationsOpen}
+        items={items}
+        onClose={() => setNotificationsOpen(false)}
+        onOpenItem={(item) => {
+          setNotificationsOpen(false);
+          setSelectedItemId(item.id);
+        }}
+      />
     </div>
   );
 }

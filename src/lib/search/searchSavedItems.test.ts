@@ -115,4 +115,40 @@ describe('searchSavedItems', () => {
 
     expect(results.map((result) => result.item.id)).toEqual(['hero-image', 'link-pricing', 'shot-pricing']);
   });
+
+  it('limits inbox to uncategorized items and library to all active items', () => {
+    const categorized = items.map((item, index) =>
+      index === 0 ? { ...item, projectId: 'project-a' } : item
+    );
+
+    const inboxResults = searchSavedItems(categorized, {
+      text: '',
+      filter: 'inbox',
+      sortBy: 'newest'
+    });
+    const libraryResults = searchSavedItems(categorized, {
+      text: '',
+      filter: 'library',
+      sortBy: 'newest'
+    });
+
+    expect(inboxResults).toHaveLength(2);
+    expect(libraryResults).toHaveLength(3);
+    expect(inboxResults.some((result) => result.item.id === 'shot-pricing')).toBe(false);
+  });
+
+  it('filters by project id', () => {
+    const categorized = items.map((item, index) =>
+      index < 2 ? { ...item, projectId: 'project-a' } : item
+    );
+
+    const results = searchSavedItems(categorized, {
+      text: '',
+      filter: 'library',
+      sortBy: 'newest',
+      projectId: 'project-a'
+    });
+
+    expect(results).toHaveLength(2);
+  });
 });

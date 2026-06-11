@@ -1,6 +1,12 @@
-import { Clipboard, FileImage, Link, Type } from 'lucide-react';
-import { useRef, useState } from 'react';
+import type { DragEvent, ReactNode } from 'react';
+import { FileImage, Link, Type } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { SavedItem } from '../../domain/savedItem';
+import { CommandKey } from '../../components/CommandKey';
+import { SurfaceCard } from '../../components/SurfaceCard';
+import { modShortcutKeys } from '../../lib/keyboardShortcuts';
+
+type CaptureMode = 'link' | 'image' | 'snippet' | null;
 
 interface CapturePanelProps {
   onCreate: (input: {
@@ -15,13 +21,60 @@ interface CapturePanelProps {
     tags?: string[];
     thumbnailColor?: string;
   }) => Promise<unknown>;
+  initialMode?: CaptureMode;
+  initialSnippet?: string;
+  initialLink?: string;
+  captureFocusToken?: number;
 }
 
-export function CapturePanel({ onCreate }: CapturePanelProps) {
-  const [linkValue, setLinkValue] = useState('');
-  const [snippetValue, setSnippetValue] = useState('');
+export function CapturePanel({
+  onCreate,
+  initialMode = null,
+  initialSnippet = '',
+  initialLink = '',
+  captureFocusToken = 0
+}: CapturePanelProps) {
+  const [activeMode, setActiveMode] = useState<CaptureMode>(initialMode);
+  const [linkValue, setLinkValue] = useState(initialLink);
+  const [snippetValue, setSnippetValue] = useState(initialSnippet);
   const [message, setMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (initialMode) {
+      setActiveMode(initialMode);
+    }
+  }, [initialMode, captureFocusToken]);
+
+  useEffect(() => {
+    if (initialSnippet) {
+      setSnippetValue(initialSnippet);
+    }
+  }, [initialSnippet, captureFocusToken]);
+
+  useEffect(() => {
+    if (initialLink) {
+      setLinkValue(initialLink);
+    }
+  }, [initialLink, captureFocusToken]);
+
+  useEffect(() => {
+    if (captureFocusToken > 0) {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [captureFocusToken]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setActiveMode(null);
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   async function saveLink() {
     if (!linkValue.trim()) {
@@ -39,6 +92,7 @@ export function CapturePanel({ onCreate }: CapturePanelProps) {
       thumbnailColor: 'link'
     });
     setLinkValue('');
+    setActiveMode(null);
     setMessage('Link saved.');
   }
 
@@ -56,6 +110,7 @@ export function CapturePanel({ onCreate }: CapturePanelProps) {
       thumbnailColor: 'snippet'
     });
     setSnippetValue('');
+    setActiveMode(null);
     setMessage('Snippet saved.');
   }
 
@@ -72,24 +127,29 @@ export function CapturePanel({ onCreate }: CapturePanelProps) {
       tags: ['image'],
       thumbnailColor: 'hero'
     });
+    setActiveMode(null);
     setMessage('Image saved.');
   }
 
   return (
-    <section className="capture-panel" aria-labelledby="capture-title">
-      <div className="capture-heading">
-        <Clipboard size={22} aria-hidden="true" />
-        <div>
-          <h2 id="capture-title">Capture anything to add to your inbox</h2>
-          <p>Save links, screenshots, images, and text without leaving the workspace.</p>
-        </div>
-      </div>
-
+    <SurfaceCard
+      ref={panelRef}
+      as="section"
+      className="capture-panel"
+      aria-label="Capture saved content"
+    >
       <div className="capture-grid">
-        <div className="capture-tile">
-          <span className="tile-icon tile-link" aria-hidden="true">
-            <Link size={25} />
-          </span>
+        <CaptureTile
+          mode="link"
+          activeMode={activeMode}
+          onActivate={() => setActiveMode('link')}
+          icon={<Link size={18} strokeWidth={1.5} />}
+          iconClass="tile-link"
+          title="Paste link"
+          subtitle="Save any URL"
+          shortcut={modShortcutKeys('V')}
+          shortcutLabel="Paste link shortcut"
+        >
           <label htmlFor="link-input">Paste link</label>
           <div className="input-row">
             <input
@@ -102,10 +162,19 @@ export function CapturePanel({ onCreate }: CapturePanelProps) {
               Save
             </button>
           </div>
-        </div>
+        </CaptureTile>
 
-        <div
-          className="capture-tile drop-tile"
+        <CaptureTile
+          mode="image"
+          activeMode={activeMode}
+          onActivate={() => setActiveMode('image')}
+          icon={<FileImage size={18} strokeWidth={1.5} />}
+          iconClass="tile-image"
+          title="Drop screenshot"
+          subtitle="or image here"
+          shortcut={modShortcutKeys('Shift', 'V')}
+          shortcutLabel="Paste image shortcut"
+          className="drop-tile"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
@@ -115,11 +184,7 @@ export function CapturePanel({ onCreate }: CapturePanelProps) {
             }
           }}
         >
-          <span className="tile-icon tile-image" aria-hidden="true">
-            <FileImage size={25} />
-          </span>
           <label htmlFor="image-input">Drop screenshot</label>
-          <p>or image here</p>
           <input
             ref={fileInputRef}
             id="image-input"
@@ -135,12 +200,19 @@ export function CapturePanel({ onCreate }: CapturePanelProps) {
           <button type="button" onClick={() => fileInputRef.current?.click()}>
             Choose image
           </button>
-        </div>
+        </CaptureTile>
 
-        <div className="capture-tile">
-          <span className="tile-icon tile-snippet" aria-hidden="true">
-            <Type size={25} />
-          </span>
+        <CaptureTile
+          mode="snippet"
+          activeMode={activeMode}
+          onActivate={() => setActiveMode('snippet')}
+          icon={<Type size={18} strokeWidth={1.5} />}
+          iconClass="tile-snippet"
+          title="Save snippet"
+          subtitle="Capture text"
+          shortcut={modShortcutKeys('Shift', 'T')}
+          shortcutLabel="Save snippet shortcut"
+        >
           <label htmlFor="snippet-input">Save snippet</label>
           <textarea
             id="snippet-input"
@@ -152,13 +224,84 @@ export function CapturePanel({ onCreate }: CapturePanelProps) {
           <button type="button" onClick={() => void saveSnippet()}>
             Save text
           </button>
-        </div>
+        </CaptureTile>
       </div>
 
       <p className="capture-message" role="status">
         {message}
       </p>
-    </section>
+    </SurfaceCard>
+  );
+}
+
+interface CaptureTileProps {
+  mode: Exclude<CaptureMode, null>;
+  activeMode: CaptureMode;
+  onActivate: () => void;
+  icon: ReactNode;
+  iconClass: string;
+  title: string;
+  subtitle: string;
+  shortcut: string[];
+  shortcutLabel: string;
+  className?: string;
+  children: ReactNode;
+  onDragOver?: (event: DragEvent) => void;
+  onDrop?: (event: DragEvent) => void;
+}
+
+function CaptureTile({
+  mode,
+  activeMode,
+  onActivate,
+  icon,
+  iconClass,
+  title,
+  subtitle,
+  shortcut,
+  shortcutLabel,
+  className = '',
+  children,
+  onDragOver,
+  onDrop
+}: CaptureTileProps) {
+  const expanded = activeMode === mode;
+  const collapsed = activeMode !== null && !expanded;
+
+  if (collapsed) {
+    return null;
+  }
+
+  if (expanded) {
+    return (
+      <div
+        className={`capture-action-tile capture-action-tile--expanded ${className}`.trim()}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+      >
+        <div className="capture-action-tile__form">{children}</div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={`capture-action-tile ${className}`.trim()}
+      aria-expanded={false}
+      onClick={onActivate}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <span className={`tile-icon ${iconClass}`} aria-hidden="true">
+        {icon}
+      </span>
+      <span className="capture-action-tile__copy">
+        <strong>{title}</strong>
+        <span>{subtitle}</span>
+        <CommandKey keys={shortcut} label={shortcutLabel} />
+      </span>
+    </button>
   );
 }
 

@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { CreateSavedItemInput, SavedItem, UpdateSavedItemInput } from '../../domain/savedItem';
-import { screenieRepository } from '../../lib/storage/screenieRepository';
+import type {
+  CreateProjectInput,
+  CreateSavedItemInput,
+  Project,
+  SavedItem,
+  UpdateSavedItemInput
+} from '../../domain/savedItem';
+import { ensureSeeded, screenieRepository } from '../../lib/storage/screenieRepository';
 
 export function useSavedItems() {
   const [items, setItems] = useState<SavedItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -12,7 +19,12 @@ export function useSavedItems() {
     setError(null);
 
     try {
-      setItems(await screenieRepository.list());
+      const [nextItems, nextProjects] = await Promise.all([
+        screenieRepository.list(),
+        screenieRepository.listProjects()
+      ]);
+      setItems(nextItems);
+      setProjects(nextProjects);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load Screenie items.');
     } finally {
@@ -50,25 +62,44 @@ export function useSavedItems() {
     [reload]
   );
 
+  const createProject = useCallback(
+    async (input: CreateProjectInput) => {
+      const project = await screenieRepository.createProject(input);
+      await reload();
+      return project;
+    },
+    [reload]
+  );
+
+  const clearAll = useCallback(async () => {
+    await screenieRepository.clear();
+    await ensureSeeded();
+    await reload();
+  }, [reload]);
+
   const counts = useMemo(() => {
     const active = items.filter((item) => item.status === 'active');
     return {
-      inbox: active.length,
+      inbox: active.filter((item) => !item.projectId).length,
       library: active.length,
       favorites: active.filter((item) => item.isFavorite).length,
       tags: new Set(active.flatMap((item) => item.tags)).size,
-      trash: items.filter((item) => item.status === 'trash').length
+      trash: items.filter((item) => item.status === 'trash').length,
+      projects: projects.length
     };
-  }, [items]);
+  }, [items, projects]);
 
   return {
     items,
+    projects,
     counts,
     isLoading,
     error,
     reload,
     createItem,
     updateItem,
-    deleteItem
+    deleteItem,
+    createProject,
+    clearAll
   };
 }

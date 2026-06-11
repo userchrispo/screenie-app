@@ -32,8 +32,9 @@ if (isVitest) {
     });
 
     test('routes top-bar search focus to the Find view', async ({ page }) => {
-      await page.getByLabel('Search saved items').fill('pricing');
-      await expect(page.getByLabel('Search everything in Screenie')).toBeVisible();
+      await page.getByPlaceholder('Search saved items...').click();
+      await expect(page.getByLabel('Search everything in Screenie')).toBeFocused();
+      await expect(page.getByRole('heading', { name: 'Find', exact: true })).toBeVisible();
     });
   });
 }

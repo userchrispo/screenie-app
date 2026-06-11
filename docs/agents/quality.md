@@ -1,7 +1,7 @@
 # Quality Engineer Status
 
 ## Now
-- Synced `feature/quality-e2e` with `origin/main` MVP and enabled gap-filling e2e plus component tests.
+- Merged into `main`. Gap-filling e2e and component tests are integrated and passing.
 
 ## Done
 - Merged `origin/main` (MVP at `8c9ca97`) into `feature/quality-e2e` without blind conflict resolution.
@@ -34,4 +34,3 @@
 
 ## Needs from others
 - Frontend should wire stub nav/toolbar buttons before those flows can be tested.
-- Main thread should merge `feature/quality-e2e` after verification; `e2e/screenie.spec.ts` from main is retained unchanged.

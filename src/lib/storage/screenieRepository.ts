@@ -1,13 +1,16 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import {
+  createProject,
   createSavedItem,
   updateSavedItem,
+  type CreateProjectInput,
   type CreateSavedItemInput,
+  type Project,
   type SavedItem,
   type ScreenieRepository,
   type UpdateSavedItemInput
 } from '../../domain/savedItem';
-import { seedItems } from './seedData';
+import { seedItems, seedProjects } from './seedData';
 
 interface ScreenieDb extends DBSchema {
   items: {
@@ -19,6 +22,13 @@ interface ScreenieDb extends DBSchema {
       'by-type': string;
     };
   };
+  projects: {
+    key: string;
+    value: Project;
+    indexes: {
+      'by-created': string;
+    };
+  };
   meta: {
     key: string;
     value: { key: string; value: string };
@@ -26,7 +36,7 @@ interface ScreenieDb extends DBSchema {
 }
 
 const DB_NAME = 'screenie-local';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<ScreenieDb>> | undefined;
 
@@ -83,18 +93,61 @@ export const screenieRepository: ScreenieRepository = {
     await db.delete('items', id);
   },
 
-  async seed(items: SavedItem[]) {
+  async listProjects() {
+    await ensureSeeded();
     const db = await getDb();
-    const transaction = db.transaction(['items', 'meta'], 'readwrite');
+    return sortProjects(await db.getAll('projects'));
+  },
+
+  async createProject(input: CreateProjectInput) {
+    const db = await getDb();
+    const project = createProject(input);
+    await db.put('projects', project);
+    return project;
+  },
+
+  async renameProject(id: string, name: string) {
+    const db = await getDb();
+    const existing = await db.get('projects', id);
+
+    if (!existing) {
+      throw new Error(`Project not found: ${id}`);
+    }
+
+    const updated: Project = { ...existing, name: name.trim() || 'Untitled project' };
+    await db.put('projects', updated);
+    return updated;
+  },
+
+  async removeProject(id: string) {
+    const db = await getDb();
+    const items = await db.getAll('items');
+
+    const transaction = db.transaction(['items', 'projects'], 'readwrite');
+    for (const item of items) {
+      if (item.projectId === id) {
+        const updated = updateSavedItem(item, { projectId: null });
+        await transaction.objectStore('items').put(updated);
+      }
+    }
+    await transaction.objectStore('projects').delete(id);
+    await transaction.done;
+  },
+
+  async seed(items: SavedItem[], projects: Project[] = seedProjects) {
+    const db = await getDb();
+    const transaction = db.transaction(['items', 'projects', 'meta'], 'readwrite');
     await Promise.all(items.map((item) => transaction.objectStore('items').put(item)));
+    await Promise.all(projects.map((project) => transaction.objectStore('projects').put(project)));
     await transaction.objectStore('meta').put({ key: 'seeded', value: 'true' });
     await transaction.done;
   },
 
   async clear() {
     const db = await getDb();
-    const transaction = db.transaction(['items', 'meta'], 'readwrite');
+    const transaction = db.transaction(['items', 'projects', 'meta'], 'readwrite');
     await transaction.objectStore('items').clear();
+    await transaction.objectStore('projects').clear();
     await transaction.objectStore('meta').clear();
     await transaction.done;
   }
@@ -104,16 +157,22 @@ export async function ensureSeeded() {
   const db = await getDb();
   const seeded = await db.get('meta', 'seeded');
 
-  if (seeded?.value === 'true') {
+  if (seeded?.value !== 'true') {
+    await screenieRepository.seed(seedItems, seedProjects);
     return;
   }
 
-  await screenieRepository.seed(seedItems);
+  const projects = await db.getAll('projects');
+  if (projects.length === 0) {
+    const transaction = db.transaction(['projects'], 'readwrite');
+    await Promise.all(seedProjects.map((project) => transaction.objectStore('projects').put(project)));
+    await transaction.done;
+  }
 }
 
 function getDb() {
   dbPromise ??= openDB<ScreenieDb>(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    upgrade(db, oldVersion) {
       if (!db.objectStoreNames.contains('items')) {
         const items = db.createObjectStore('items', { keyPath: 'id' });
         items.createIndex('by-created', 'createdAt');
@@ -124,6 +183,11 @@ function getDb() {
       if (!db.objectStoreNames.contains('meta')) {
         db.createObjectStore('meta', { keyPath: 'key' });
       }
+
+      if (oldVersion < 2 && !db.objectStoreNames.contains('projects')) {
+        const projects = db.createObjectStore('projects', { keyPath: 'id' });
+        projects.createIndex('by-created', 'createdAt');
+      }
     }
   });
 
@@ -132,4 +196,8 @@ function getDb() {
 
 function sortNewest(items: SavedItem[]): SavedItem[] {
   return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function sortProjects(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => a.name.localeCompare(b.name));
 }

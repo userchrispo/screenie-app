@@ -1,4 +1,28 @@
-import type { SavedItem } from '../../domain/savedItem';
+import type { Project, SavedItem } from '../../domain/savedItem';
+
+export const seedProjectIds = {
+  websiteRedesign: 'seed-project-website-redesign',
+  q2Campaign: 'seed-project-q2-campaign',
+  pricingResearch: 'seed-project-pricing-research'
+} as const;
+
+export const seedProjects: Project[] = [
+  {
+    id: seedProjectIds.websiteRedesign,
+    name: 'Website Redesign',
+    createdAt: '2024-05-01T09:00:00.000Z'
+  },
+  {
+    id: seedProjectIds.q2Campaign,
+    name: 'Q2 Campaign',
+    createdAt: '2024-05-02T09:00:00.000Z'
+  },
+  {
+    id: seedProjectIds.pricingResearch,
+    name: 'Pricing Research',
+    createdAt: '2024-05-03T09:00:00.000Z'
+  }
+];
 
 export const seedItems: SavedItem[] = [
   {
@@ -8,6 +32,7 @@ export const seedItems: SavedItem[] = [
     text: 'Pro $49 /mo Billed monthly',
     extractedText: 'Simple transparent pricing. Starter $19. Pro $49. Team $99. Priority support.',
     tags: ['pricing', 'pro plan', 'screenshot'],
+    projectId: seedProjectIds.pricingResearch,
     isFavorite: true,
     status: 'active',
     createdAt: '2024-05-08T10:42:00.000Z',
@@ -21,6 +46,7 @@ export const seedItems: SavedItem[] = [
     url: 'https://screenie.app/pricing',
     text: 'Pro plan includes advanced analytics and priority support.',
     tags: ['pricing', 'pro plan', 'features'],
+    projectId: seedProjectIds.pricingResearch,
     isFavorite: false,
     status: 'active',
     createdAt: '2024-05-07T15:15:00.000Z',
@@ -33,6 +59,7 @@ export const seedItems: SavedItem[] = [
     title: 'Pricing hero image',
     text: 'Filename contains pricing; tagged pricing.',
     tags: ['pricing', 'hero'],
+    projectId: seedProjectIds.pricingResearch,
     isFavorite: false,
     status: 'active',
     createdAt: '2024-05-06T09:31:00.000Z',
@@ -58,6 +85,7 @@ export const seedItems: SavedItem[] = [
     url: 'https://www.notion.so/home',
     text: 'Reference links for a visual design exploration.',
     tags: ['design', 'inspiration'],
+    projectId: seedProjectIds.websiteRedesign,
     isFavorite: false,
     status: 'active',
     createdAt: '2024-05-04T11:12:00.000Z',

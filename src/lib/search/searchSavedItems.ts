@@ -33,6 +33,7 @@ export function searchSavedItems(items: SavedItem[], query: SearchQuery): Search
 
   const results = items
     .filter((item) => matchesFilter(item, query.filter))
+    .filter((item) => !query.projectId || item.projectId === query.projectId)
     .filter((item) => typeFilter.size === 0 || typeFilter.has(item.type))
     .filter((item) => normalizedTags.every((tag) => item.tags.includes(tag)))
     .map((item) => scoreItem(item, terms))
@@ -104,6 +105,14 @@ function matchesFilter(item: SavedItem, filter: SearchQuery['filter']): boolean 
 
   if (filter === 'tags') {
     return item.tags.length > 0;
+  }
+
+  if (filter === 'inbox') {
+    return !item.projectId;
+  }
+
+  if (filter === 'library') {
+    return true;
   }
 
   return true;

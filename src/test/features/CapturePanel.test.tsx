@@ -2,13 +2,29 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CapturePanel } from '../../features/inbox/CapturePanel';
 
+async function expandLinkTile(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Paste link/i }));
+}
+
+async function expandSnippetTile(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Save snippet/i }));
+}
+
 describe('CapturePanel', () => {
-  it('renders capture labels and action buttons', () => {
+  it('renders capture labels and action buttons', async () => {
+    const user = userEvent.setup();
     render(<CapturePanel onCreate={vi.fn().mockResolvedValue(undefined)} />);
 
+    expect(screen.getByRole('button', { name: /Paste link/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save snippet/i })).toBeInTheDocument();
+
+    await expandLinkTile(user);
     expect(screen.getByLabelText('Paste link')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await expandSnippetTile(user);
     expect(screen.getByLabelText('Save snippet')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save', exact: true })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save text' })).toBeInTheDocument();
   });
 
@@ -16,9 +32,12 @@ describe('CapturePanel', () => {
     const user = userEvent.setup();
     render(<CapturePanel onCreate={vi.fn().mockResolvedValue(undefined)} />);
 
-    await user.click(screen.getByRole('button', { name: 'Save', exact: true }));
+    await expandLinkTile(user);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(screen.getByRole('status')).toHaveTextContent('Paste a URL first.');
 
+    await user.keyboard('{Escape}');
+    await expandSnippetTile(user);
     await user.click(screen.getByRole('button', { name: 'Save text' }));
     expect(screen.getByRole('status')).toHaveTextContent('Write a snippet first.');
   });
@@ -28,8 +47,9 @@ describe('CapturePanel', () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
 
+    await expandLinkTile(user);
     await user.type(screen.getByLabelText('Paste link'), 'screenie.app/pricing');
-    await user.click(screen.getByRole('button', { name: 'Save', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(onCreate).toHaveBeenCalledOnce();
     expect(screen.getByRole('status')).toHaveTextContent('Link saved.');
@@ -40,6 +60,7 @@ describe('CapturePanel', () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
 
+    await expandSnippetTile(user);
     await user.type(
       screen.getByLabelText('Save snippet'),
       'Pro plan includes advanced analytics and priority support.'

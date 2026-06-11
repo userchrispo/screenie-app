@@ -41,8 +41,14 @@ const pricingFixtures: SavedItem[] = [
   }
 ];
 
-function FindViewHarness({ items }: { items: SavedItem[] }) {
-  const [searchText, setSearchText] = useState('');
+function FindViewHarness({
+  items,
+  initialSearch = ''
+}: {
+  items: SavedItem[];
+  initialSearch?: string;
+}) {
+  const [searchText, setSearchText] = useState(initialSearch);
   const [sortBy, setSortBy] = useState<ScreenieSort>('best-match');
 
   return (
@@ -53,30 +59,39 @@ function FindViewHarness({ items }: { items: SavedItem[] }) {
       sortBy={sortBy}
       onSearchTextChange={setSearchText}
       onSortChange={setSortBy}
+      typeFilter={[]}
+      tagFilter={[]}
       onToggleFavorite={vi.fn()}
       onMoveToTrash={vi.fn()}
       onRestore={vi.fn()}
+      onOpenDetail={vi.fn()}
+      onTagClick={vi.fn()}
     />
   );
 }
 
 describe('FindView', () => {
-  it('exposes an accessible search field and sort combobox', () => {
+  it('exposes the page header and sort combobox', () => {
     render(<FindViewHarness items={pricingFixtures} />);
 
-    expect(screen.getByRole('textbox', { name: /search everything in screenie/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Find$/ })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /sort by/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Newest' })).toBeInTheDocument();
   });
 
-  it('shows result count and pricing matches for seeded-style fixtures', async () => {
-    const user = userEvent.setup();
-    render(<FindViewHarness items={pricingFixtures} />);
-
-    await user.type(screen.getByRole('textbox', { name: /search everything in screenie/i }), 'pricing pro plan');
+  it('shows result count and pricing matches for seeded-style fixtures', () => {
+    render(<FindViewHarness items={pricingFixtures} initialSearch="pricing pro plan" />);
 
     expect(screen.getByText(/\d+ results found/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pricing screenshot' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Our Pricing Plans - Screenie' })).toBeInTheDocument();
+  });
+
+  it('updates sort order from the header control', async () => {
+    const user = userEvent.setup();
+    render(<FindViewHarness items={pricingFixtures} initialSearch="pricing" />);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /sort by/i }), 'newest');
+    expect(screen.getByRole('combobox', { name: /sort by/i })).toHaveValue('newest');
   });
 });

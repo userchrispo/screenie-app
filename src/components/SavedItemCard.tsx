@@ -10,52 +10,87 @@ import {
 } from 'lucide-react';
 import type { SavedItem } from '../domain/savedItem';
 import { formatBytes, formatItemDate } from '../lib/format';
+import { SurfaceCard } from './SurfaceCard';
 
 interface SavedItemCardProps {
   item: SavedItem;
   matchedText?: string;
+  matchSummary?: string;
   onToggleFavorite: (item: SavedItem) => void;
   onMoveToTrash: (item: SavedItem) => void;
   onRestore: (item: SavedItem) => void;
+  onOpenDetail?: (item: SavedItem) => void;
+  onTagClick?: (tag: string) => void;
+  onDeletePermanently?: (item: SavedItem) => void;
 }
 
 export function SavedItemCard({
   item,
   matchedText,
+  matchSummary,
   onToggleFavorite,
   onMoveToTrash,
-  onRestore
+  onRestore,
+  onOpenDetail,
+  onTagClick,
+  onDeletePermanently
 }: SavedItemCardProps) {
   const meta = getItemMeta(item);
+  const previewText = matchedText ?? item.text ?? item.description ?? 'No preview available.';
+  const matchLabel = matchedText ? 'Matched text' : matchSummary ? 'Why it matched' : 'Saved text';
 
   return (
-    <article className="item-card">
+    <SurfaceCard
+      as="article"
+      className={`item-card${onOpenDetail ? ' item-card--interactive' : ''}`}
+      onClick={onOpenDetail ? () => onOpenDetail(item) : undefined}
+    >
       <div className={`item-thumb item-thumb-${item.thumbnailColor ?? item.type}`}>
         {item.imageDataUrl ? (
           <img src={item.imageDataUrl} alt="" />
         ) : (
-          <ItemTypeIcon type={item.type} size={34} />
+          <ItemTypeIcon type={item.type} size={28} strokeWidth={1.5} />
         )}
       </div>
 
       <div className="item-content">
         <div className="item-kicker">
-          <ItemTypeIcon type={item.type} size={18} />
+          <ItemTypeIcon type={item.type} size={18} strokeWidth={1.5} />
           <span>{meta}</span>
-          {item.extractedText && <span className="ocr-chip">OCR</span>}
+          {item.extractedText ? <span className="ocr-chip">OCR</span> : null}
         </div>
         <h3>{item.title}</h3>
-        {item.url && <p className="item-url">{item.url}</p>}
+        {item.url ? <p className="item-url">{item.url}</p> : null}
         <p className="matched-copy">
-          <span>{matchedText ? 'Matched text' : 'Saved text'}</span>
-          {matchedText ?? item.text ?? item.description ?? 'No preview available.'}
+          <span>{matchLabel}</span>
+          {matchedText ? (
+            <HighlightedText text={previewText} highlight={matchedText} />
+          ) : matchSummary ? (
+            matchSummary
+          ) : (
+            previewText
+          )}
         </p>
         <div className="tag-row" aria-label={`${item.title} tags`}>
-          {item.tags.map((tag) => (
-            <span className="tag-chip" key={tag}>
-              {tag}
-            </span>
-          ))}
+          {item.tags.map((tag) =>
+            onTagClick ? (
+              <button
+                type="button"
+                className="tag-chip tag-chip--button"
+                key={tag}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onTagClick(tag);
+                }}
+              >
+                {tag}
+              </button>
+            ) : (
+              <span className="tag-chip" key={tag}>
+                {tag}
+              </span>
+            )
+          )}
         </div>
       </div>
 
@@ -65,51 +100,114 @@ export function SavedItemCard({
           <button
             className="icon-button"
             type="button"
-            aria-label={item.isFavorite ? `Remove ${item.title} from favorites` : `Favorite ${item.title}`}
-            onClick={() => onToggleFavorite(item)}
+            aria-label={
+              item.isFavorite ? `Remove ${item.title} from favorites` : `Favorite ${item.title}`
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleFavorite(item);
+            }}
           >
-            <Star size={18} fill={item.isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
+            <Star size={18} strokeWidth={1.5} fill={item.isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
           {item.status === 'trash' ? (
-            <button
-              className="icon-button"
-              type="button"
-              aria-label={`Restore ${item.title}`}
-              onClick={() => onRestore(item)}
-            >
-              <RotateCcw size={18} aria-hidden="true" />
-            </button>
+            <>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={`Restore ${item.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRestore(item);
+                }}
+              >
+                <RotateCcw size={18} strokeWidth={1.5} aria-hidden="true" />
+              </button>
+              {onDeletePermanently ? (
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={`Delete ${item.title} permanently`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeletePermanently(item);
+                  }}
+                >
+                  <Trash2 size={18} strokeWidth={1.5} aria-hidden="true" />
+                </button>
+              ) : null}
+            </>
           ) : (
             <button
               className="icon-button"
               type="button"
               aria-label={`Move ${item.title} to trash`}
-              onClick={() => onMoveToTrash(item)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMoveToTrash(item);
+              }}
             >
-              <Trash2 size={18} aria-hidden="true" />
+              <Trash2 size={18} strokeWidth={1.5} aria-hidden="true" />
             </button>
           )}
-          <ChevronRight size={22} aria-hidden="true" />
+          <button
+            type="button"
+            className="icon-button item-card__open"
+            aria-label={`Open ${item.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenDetail?.(item);
+            }}
+          >
+            <ChevronRight size={18} strokeWidth={1.5} aria-hidden="true" />
+          </button>
         </div>
       </div>
-    </article>
+    </SurfaceCard>
   );
 }
 
-function ItemTypeIcon({ type, size }: { type: SavedItem['type']; size: number }) {
+function HighlightedText({ text, highlight }: { text: string; highlight: string }) {
+  const index = text.toLowerCase().indexOf(highlight.toLowerCase());
+  if (index < 0) {
+    return <>{text}</>;
+  }
+
+  const before = text.slice(0, index);
+  const match = text.slice(index, index + highlight.length);
+  const after = text.slice(index + highlight.length);
+
+  return (
+    <>
+      {before}
+      <mark className="match-highlight">{match}</mark>
+      {after}
+    </>
+  );
+}
+
+function ItemTypeIcon({
+  type,
+  size,
+  strokeWidth = 1.5
+}: {
+  type: SavedItem['type'];
+  size: number;
+  strokeWidth?: number;
+}) {
   if (type === 'link') {
-    return <Link size={size} aria-hidden="true" />;
+    return <Link size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
   }
 
   if (type === 'snippet') {
-    return <Type size={size} aria-hidden="true" />;
+    return <Type size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
   }
 
   if (type === 'image') {
-    return <Image size={size} aria-hidden="true" />;
+    return <Image size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
   }
 
-  return <FileImage size={size} aria-hidden="true" />;
+  return <FileImage size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
 }
 
 function getItemMeta(item: SavedItem): string {
@@ -122,8 +220,8 @@ function getItemMeta(item: SavedItem): string {
   }
 
   if (item.type === 'image') {
-    return formatBytes(item.sizeBytes) ? `Image - ${formatBytes(item.sizeBytes)}` : 'Image';
+    return formatBytes(item.sizeBytes) ? `Image · ${formatBytes(item.sizeBytes)}` : 'Image';
   }
 
-  return formatBytes(item.sizeBytes) ? `Screenshot - ${formatBytes(item.sizeBytes)}` : 'Screenshot';
+  return formatBytes(item.sizeBytes) ? `Screenshot · ${formatBytes(item.sizeBytes)}` : 'Screenshot';
 }

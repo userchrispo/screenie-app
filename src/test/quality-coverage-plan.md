@@ -8,11 +8,11 @@
 - Playwright quality gap flows (`e2e/screenie-mvp-flows.spec.ts`): seeded search result count + sort, sidebar Favorites/Trash navigation, top-bar search routing to Find.
 
 ## Still blocked
-- Image upload and drag-drop capture e2e (file input not covered yet).
-- Stub sidebar/top-bar controls: `Integrations`, `Templates`, `Notifications`, `Settings`, `Filter items`, and `All items` ghost button have no behavior to assert.
-- Favorite toggle e2e (action exists on cards, dedicated flow test deferred).
 - Responsive visual regression against `screenie-capture.png` and `screenie-find.png` (no snapshot tooling yet).
-- Library and Tags saved-view dedicated e2e (views render but lack unique assertions beyond heading).
+
+## Added in functional pass
+- `e2e/screenie-functional.spec.ts`: favorite toggle, settings panel, Ctrl/Cmd+K search focus, tag browser filter, permanent delete from trash, image upload + find.
+- Projects in IndexedDB, filter menu, library/tags views, item detail panel, integrations/templates/settings/notifications panels.
 
 ## Visual/runtime checkpoints (manual until automated)
 - Check 320, 768, 1024, and 1440 px widths.

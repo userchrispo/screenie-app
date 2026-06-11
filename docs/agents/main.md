@@ -1,8 +1,8 @@
 # Main Architect Status
 
 ## Now
-- Integrated Screenie local MVP on `main`.
-- Monitoring helper branches and preserving main as the merge owner.
+- Full functional pass complete: projects, filters, library/tags views, item detail, panels, keyboard shortcuts.
+- All verification green: `npm test` (22), `npm run e2e` (13), `npm run build`.
 
 ## Done
 - Initialized git and attached `origin`.
@@ -11,17 +11,18 @@
 - Added shared saved-item contracts, IndexedDB repository, seed data, and search.
 - Built Inbox, capture flows, Find, filters, favorites, trash, responsive shell, and local persistence.
 - Added unit/component and Playwright coverage for core MVP flows.
-- Pushed `main` to `origin/main`.
+- Merged `feature/search-data` and `feature/quality-e2e` into `main`.
+- Integrated frontend glass UI (tokens, primitives, inbox/find refresh).
+- Removed orphan `scripts/` duplicate tree that was not wired into the app.
 
 ## Blocked
-- Frontend helper branch has uncommitted work from the older base commit.
-- Search/data and quality helper branches completed cleanly, but they started before the integrated MVP and should be reviewed/cherry-picked rather than merged wholesale.
+- None.
 
 ## Next
-- Review helper branches when they finish, cherry-pick or merge useful non-conflicting improvements, then retire worktrees.
+- Commit functional pass on `main`, then push to `origin/main`.
 
 ## Files touched
 - Main architecture, app shell, domain/storage/search, UI, tests, and coordination docs.
 
 ## Needs from others
-- Helper branches should finish with status updates and commits before main considers merging their work.
+- None.

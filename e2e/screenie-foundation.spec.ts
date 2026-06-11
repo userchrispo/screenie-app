@@ -25,7 +25,8 @@ if (isVitest) {
 
       await expect(page.getByRole('main', { name: /screenie app/i })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
-      await expect(page.getByRole('heading', { name: /capture anything/i })).toBeVisible();
+      await expect(page.getByRole('region', { name: /capture workspace/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /paste link/i })).toBeVisible();
       expect(consoleErrors).toEqual([]);
     });
   });

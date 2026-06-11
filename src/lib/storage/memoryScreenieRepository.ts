@@ -1,14 +1,21 @@
 import {
+  createProject,
   createSavedItem,
   updateSavedItem,
+  type CreateProjectInput,
   type CreateSavedItemInput,
+  type Project,
   type SavedItem,
   type ScreenieRepository,
   type UpdateSavedItemInput
 } from '../../domain/savedItem';
 
-export function createMemoryScreenieRepository(initialItems: SavedItem[] = []): ScreenieRepository {
+export function createMemoryScreenieRepository(
+  initialItems: SavedItem[] = [],
+  initialProjects: Project[] = []
+): ScreenieRepository {
   const items = new Map(initialItems.map((item) => [item.id, item]));
+  const projects = new Map(initialProjects.map((project) => [project.id, project]));
 
   return {
     async list() {
@@ -55,18 +62,55 @@ export function createMemoryScreenieRepository(initialItems: SavedItem[] = []): 
       items.delete(id);
     },
 
-    async seed(seedItems: SavedItem[]) {
+    async listProjects() {
+      return sortProjects(Array.from(projects.values()));
+    },
+
+    async createProject(input: CreateProjectInput) {
+      const project = createProject(input);
+      projects.set(project.id, project);
+      return project;
+    },
+
+    async renameProject(id: string, name: string) {
+      const existing = projects.get(id);
+      if (!existing) {
+        throw new Error(`Project not found: ${id}`);
+      }
+      const updated: Project = { ...existing, name: name.trim() || 'Untitled project' };
+      projects.set(id, updated);
+      return updated;
+    },
+
+    async removeProject(id: string) {
+      for (const [itemId, item] of items) {
+        if (item.projectId === id) {
+          items.set(itemId, updateSavedItem(item, { projectId: null }));
+        }
+      }
+      projects.delete(id);
+    },
+
+    async seed(seedItems: SavedItem[], seedProjectsList: Project[] = []) {
       for (const item of seedItems) {
         items.set(item.id, item);
+      }
+      for (const project of seedProjectsList) {
+        projects.set(project.id, project);
       }
     },
 
     async clear() {
       items.clear();
+      projects.clear();
     }
   };
 }
 
 function sortNewest(items: SavedItem[]): SavedItem[] {
   return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function sortProjects(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => a.name.localeCompare(b.name));
 }

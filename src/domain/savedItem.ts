@@ -2,7 +2,19 @@ export type SavedItemType = 'link' | 'screenshot' | 'snippet' | 'image';
 export type SavedItemStatus = 'active' | 'trash';
 export type ScreenieFilter = 'inbox' | 'library' | 'favorites' | 'tags' | 'trash';
 export type ScreenieSort = 'best-match' | 'newest' | 'oldest' | 'title';
+export type ScreenieView = ScreenieFilter | 'find' | 'integrations' | 'templates' | 'settings';
 export type MatchKind = 'text' | 'metadata' | 'none';
+
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  now?: string;
+}
 
 export interface SavedItem {
   id: string;
@@ -16,6 +28,7 @@ export interface SavedItem {
   mimeType?: string;
   sizeBytes?: number;
   tags: string[];
+  projectId?: string;
   isFavorite: boolean;
   status: SavedItemStatus;
   createdAt: string;
@@ -34,6 +47,7 @@ export interface CreateSavedItemInput {
   mimeType?: string;
   sizeBytes?: number;
   tags?: string[];
+  projectId?: string;
   isFavorite?: boolean;
   status?: SavedItemStatus;
   createdAt?: string;
@@ -51,6 +65,7 @@ export interface UpdateSavedItemInput {
   mimeType?: string;
   sizeBytes?: number;
   tags?: string[];
+  projectId?: string | null;
   isFavorite?: boolean;
   status?: SavedItemStatus;
   thumbnailColor?: string;
@@ -62,6 +77,7 @@ export interface SearchQuery {
   sortBy: ScreenieSort;
   tags?: string[];
   types?: SavedItemType[];
+  projectId?: string;
   limit?: number;
 }
 
@@ -85,8 +101,22 @@ export interface ScreenieRepository {
   restore(id: string): Promise<SavedItem>;
   toggleFavorite(id: string): Promise<SavedItem>;
   remove(id: string): Promise<void>;
-  seed(items: SavedItem[]): Promise<void>;
+  listProjects(): Promise<Project[]>;
+  createProject(input: CreateProjectInput): Promise<Project>;
+  renameProject(id: string, name: string): Promise<Project>;
+  removeProject(id: string): Promise<void>;
+  seed(items: SavedItem[], projects?: Project[]): Promise<void>;
   clear(): Promise<void>;
+}
+
+export function createProject(input: CreateProjectInput): Project {
+  const now = input.now ?? new Date().toISOString();
+
+  return {
+    id: `project-${createId()}`,
+    name: normalizeProjectName(input.name),
+    createdAt: now
+  };
 }
 
 export function createSavedItem(input: CreateSavedItemInput): SavedItem {
@@ -105,6 +135,7 @@ export function createSavedItem(input: CreateSavedItemInput): SavedItem {
     mimeType: cleanOptional(input.mimeType),
     sizeBytes: input.sizeBytes,
     tags: normalizeTags(input.tags ?? []),
+    projectId: cleanOptional(input.projectId),
     isFavorite: input.isFavorite ?? false,
     status: input.status ?? 'active',
     createdAt,
@@ -130,6 +161,12 @@ export function updateSavedItem(
     mimeType: input.mimeType === undefined ? existing.mimeType : cleanOptional(input.mimeType),
     sizeBytes: input.sizeBytes === undefined ? existing.sizeBytes : input.sizeBytes,
     tags: input.tags === undefined ? existing.tags : normalizeTags(input.tags),
+    projectId:
+      input.projectId === undefined
+        ? existing.projectId
+        : input.projectId === null
+          ? undefined
+          : input.projectId,
     isFavorite: input.isFavorite ?? existing.isFavorite,
     status: input.status ?? existing.status,
     thumbnailColor:
@@ -151,6 +188,11 @@ export function normalizeTags(tags: string[]): string[] {
 function normalizeTitle(title: string): string {
   const normalized = title.trim();
   return normalized.length > 0 ? normalized : 'Untitled item';
+}
+
+function normalizeProjectName(name: string): string {
+  const normalized = name.trim();
+  return normalized.length > 0 ? normalized : 'Untitled project';
 }
 
 function cleanOptional(value?: string): string | undefined {
