@@ -4,6 +4,7 @@ import {
   Folder,
   Inbox,
   LayoutTemplate,
+  Pencil,
   Plus,
   Puzzle,
   Search,
@@ -12,10 +13,13 @@ import {
   Star,
   Tags,
   Trash2,
+  X,
   type LucideIcon
 } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Project, ScreenieView } from '../domain/savedItem';
 import { SectionLabel } from './SectionLabel';
+import { SurfaceCard } from './SurfaceCard';
 
 export interface SidebarCounts {
   inbox: number;
@@ -35,6 +39,8 @@ interface SidebarProps {
   onSelectProject: (projectId: string) => void;
   onClearProject: () => void;
   onAddProject: (name: string) => void;
+  onRenameProject: (projectId: string, name: string) => void;
+  onRemoveProject: (projectId: string) => void;
 }
 
 interface NavItem {
@@ -57,9 +63,16 @@ export function Sidebar({
   onNavigate,
   onSelectProject,
   onClearProject,
-  onAddProject
+  onAddProject,
+  onRenameProject,
+  onRemoveProject
 }: SidebarProps) {
   const isFind = activeView === 'find';
+  const [projectDialog, setProjectDialog] = useState<{ mode: 'create' } | { mode: 'rename'; project: Project } | null>(null);
+  const [deleteProject, setDeleteProject] = useState<Project | null>(null);
+  const [projectName, setProjectName] = useState('');
+  const [projectError, setProjectError] = useState('');
+  const projectInputRef = useRef<HTMLInputElement>(null);
 
   const sections: NavSection[] = [
     {
@@ -88,11 +101,67 @@ export function Sidebar({
     }
   ];
 
-  function handleAddProject() {
-    const name = window.prompt('Project name');
-    if (name?.trim()) {
-      onAddProject(name.trim());
+  useEffect(() => {
+    if (projectDialog) {
+      projectInputRef.current?.focus();
     }
+  }, [projectDialog]);
+
+  useEffect(() => {
+    if (!projectDialog && !deleteProject) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        closeProjectDialog();
+        setDeleteProject(null);
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteProject, projectDialog]);
+
+  function openProjectDialog() {
+    setProjectName('');
+    setProjectError('');
+    setProjectDialog({ mode: 'create' });
+  }
+
+  function openRenameProjectDialog(project: Project) {
+    setProjectName(project.name);
+    setProjectError('');
+    setProjectDialog({ mode: 'rename', project });
+  }
+
+  function closeProjectDialog() {
+    setProjectDialog(null);
+    setProjectError('');
+  }
+
+  function handleProjectSubmit(event: FormEvent<HTMLElement>) {
+    event.preventDefault();
+    const name = projectName.trim();
+    if (!name) {
+      setProjectError('Enter a project name.');
+      return;
+    }
+
+    if (projectDialog?.mode === 'rename') {
+      onRenameProject(projectDialog.project.id, name);
+    } else {
+      onAddProject(name);
+    }
+    closeProjectDialog();
+  }
+
+  function handleRemoveProject(project: Project) {
+    onRemoveProject(project.id);
+    if (activeProjectId === project.id) {
+      onClearProject();
+    }
+    setDeleteProject(null);
   }
 
   return (
@@ -147,7 +216,7 @@ export function Sidebar({
                   <Folder size={18} strokeWidth={1.5} aria-hidden="true" />
                 </span>
                 <span>Projects</span>
-                <button type="button" aria-label="Add project" onClick={handleAddProject}>
+                <button type="button" aria-label="Add project" onClick={openProjectDialog}>
                   <Plus size={18} strokeWidth={1.5} aria-hidden="true" />
                 </button>
               </div>
@@ -161,14 +230,32 @@ export function Sidebar({
                 ) : null}
                 {projects.map((project) => (
                   <li key={project.id}>
-                    <button
-                      type="button"
-                      aria-current={activeProjectId === project.id ? 'true' : undefined}
-                      className={activeProjectId === project.id ? 'is-active' : undefined}
-                      onClick={() => onSelectProject(project.id)}
-                    >
-                      {project.name}
-                    </button>
+                    <div className="sidebar-projects__row">
+                      <button
+                        type="button"
+                        aria-current={activeProjectId === project.id ? 'true' : undefined}
+                        className={activeProjectId === project.id ? 'is-active' : undefined}
+                        onClick={() => onSelectProject(project.id)}
+                      >
+                        {project.name}
+                      </button>
+                      <span className="sidebar-projects__actions">
+                        <button
+                          type="button"
+                          aria-label={`Rename ${project.name}`}
+                          onClick={() => openRenameProjectDialog(project)}
+                        >
+                          <Pencil size={14} strokeWidth={1.5} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${project.name}`}
+                          onClick={() => setDeleteProject(project)}
+                        >
+                          <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
+                        </button>
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -183,6 +270,81 @@ export function Sidebar({
           Quick save <kbd>Ctrl + Shift + S</kbd>
         </span>
       </p>
+
+      {projectDialog ? (
+        <div className="app-overlay app-overlay--center" role="presentation" onClick={closeProjectDialog}>
+          <SurfaceCard
+            as="form"
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="project-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={handleProjectSubmit}
+          >
+            <div className="modal-panel__header">
+              <h2 id="project-dialog-title">{projectDialog.mode === 'rename' ? 'Rename project' : 'New project'}</h2>
+              <button type="button" className="icon-button" aria-label="Close project dialog" onClick={closeProjectDialog}>
+                <X size={18} strokeWidth={1.5} aria-hidden="true" />
+              </button>
+            </div>
+            <label htmlFor="project-name-input">Project name</label>
+            <input
+              ref={projectInputRef}
+              id="project-name-input"
+              value={projectName}
+              onChange={(event) => {
+                setProjectName(event.target.value);
+                setProjectError('');
+              }}
+              placeholder="Pricing research"
+            />
+            {projectError ? (
+              <p className="modal-panel__error" role="alert">
+                {projectError}
+              </p>
+            ) : null}
+            <div className="modal-panel__actions">
+              <button type="button" className="ghost-button" onClick={closeProjectDialog}>
+                Cancel
+              </button>
+              <button type="submit" className="ghost-button ghost-button--primary">
+                {projectDialog.mode === 'rename' ? 'Rename project' : 'Create project'}
+              </button>
+            </div>
+          </SurfaceCard>
+        </div>
+      ) : null}
+      {deleteProject ? (
+        <div className="app-overlay app-overlay--center" role="presentation" onClick={() => setDeleteProject(null)}>
+          <SurfaceCard
+            as="section"
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-project-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-panel__header">
+              <h2 id="delete-project-title">Delete project</h2>
+              <button type="button" className="icon-button" aria-label="Close delete project dialog" onClick={() => setDeleteProject(null)}>
+                <X size={18} strokeWidth={1.5} aria-hidden="true" />
+              </button>
+            </div>
+            <p className="text-muted">
+              Delete "{deleteProject.name}"? Saved items stay in Screenie and move back to Inbox.
+            </p>
+            <div className="modal-panel__actions">
+              <button type="button" className="ghost-button" onClick={() => setDeleteProject(null)}>
+                Cancel
+              </button>
+              <button type="button" className="ghost-button ghost-button--danger" onClick={() => handleRemoveProject(deleteProject)}>
+                Delete project
+              </button>
+            </div>
+          </SurfaceCard>
+        </div>
+      ) : null}
     </aside>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Star, Trash2, X } from 'lucide-react';
+import { Clipboard, Star, Trash2, X } from 'lucide-react';
 import type { Project, SavedItem } from '../../domain/savedItem';
 import { formatBytes, formatItemDate } from '../../lib/format';
 import { SurfaceCard } from '../../components/SurfaceCard';
@@ -13,6 +13,7 @@ interface ItemDetailPanelProps {
   onToggleFavorite: (item: SavedItem) => void;
   onMoveToTrash: (item: SavedItem) => void;
   onDeletePermanently: (item: SavedItem) => void;
+  onRunOcr: (item: SavedItem) => void;
 }
 
 export function ItemDetailPanel({
@@ -22,12 +23,14 @@ export function ItemDetailPanel({
   onSave,
   onToggleFavorite,
   onMoveToTrash,
-  onDeletePermanently
+  onDeletePermanently,
+  onRunOcr
 }: ItemDetailPanelProps) {
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState('');
   const [projectId, setProjectId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState('');
 
   useEffect(() => {
     if (!item) {
@@ -36,6 +39,7 @@ export function ItemDetailPanel({
     setTitle(item.title);
     setTags(item.tags.join(', '));
     setProjectId(item.projectId ?? '');
+    setOcrMessage('');
   }, [item]);
 
   if (!item) {
@@ -43,6 +47,7 @@ export function ItemDetailPanel({
   }
 
   const currentItem = item;
+  const ocrStatus = getDetailOcrStatus(currentItem);
 
   async function handleSave() {
     setSaving(true);
@@ -54,6 +59,19 @@ export function ItemDetailPanel({
       });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleCopyOcrText() {
+    if (!currentItem.extractedText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentItem.extractedText);
+      setOcrMessage('OCR text copied.');
+    } catch {
+      setOcrMessage('OCR text is ready to select and copy.');
     }
   }
 
@@ -111,6 +129,46 @@ export function ItemDetailPanel({
           </div>
         )}
 
+        {ocrStatus ? (
+          <SettingsSection title="OCR">
+            <div className="detail-panel__ocr">
+              <div className="detail-panel__ocr-status">
+                <span className={`ocr-chip ocr-chip--${ocrStatus.variant}`}>{ocrStatus.label}</span>
+                <span>{ocrStatus.detail}</span>
+              </div>
+
+              {currentItem.ocrError ? <p className="modal-panel__error">{currentItem.ocrError}</p> : null}
+
+              {currentItem.extractedText ? (
+                <>
+                  <p className="detail-panel__ocr-text">{currentItem.extractedText}</p>
+                  <button type="button" className="ghost-button" onClick={() => void handleCopyOcrText()}>
+                    <Clipboard size={16} strokeWidth={1.5} aria-hidden="true" />
+                    Copy OCR text
+                  </button>
+                </>
+              ) : null}
+
+              {canRunOcr(currentItem) ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={currentItem.ocrStatus === 'processing'}
+                  onClick={() => onRunOcr(currentItem)}
+                >
+                  {getOcrActionLabel(currentItem)}
+                </button>
+              ) : null}
+
+              {ocrMessage ? (
+                <p className="capture-message" role="status">
+                  {ocrMessage}
+                </p>
+              ) : null}
+            </div>
+          </SettingsSection>
+        ) : null}
+
         <SettingsSection title="Edit">
           <div className="detail-panel__form">
             <label htmlFor="detail-title">Title</label>
@@ -167,4 +225,64 @@ export function ItemDetailPanel({
       </SurfaceCard>
     </div>
   );
+}
+
+function getDetailOcrStatus(item: SavedItem): { label: string; detail: string; variant: 'ready' | 'queued' | 'processing' | 'failed' } | null {
+  if (item.type !== 'screenshot' && item.type !== 'image') {
+    return null;
+  }
+
+  if (item.ocrStatus === 'ready' || item.extractedText) {
+    return {
+      label: 'OCR ready',
+      detail: 'Extracted text is available for search and review.',
+      variant: 'ready'
+    };
+  }
+
+  if (item.ocrStatus === 'processing') {
+    return {
+      label: 'OCR processing',
+      detail: 'Local text recognition is running in this browser.',
+      variant: 'processing'
+    };
+  }
+
+  if (item.ocrStatus === 'failed') {
+    return {
+      label: 'OCR failed',
+      detail: 'Text recognition did not finish. You can retry locally.',
+      variant: 'failed'
+    };
+  }
+
+  if (item.ocrStatus === 'queued' || item.imageDataUrl || item.mimeType) {
+    return {
+      label: 'OCR queued',
+      detail: 'This capture is waiting for local text recognition.',
+      variant: 'queued'
+    };
+  }
+
+  return null;
+}
+
+function canRunOcr(item: SavedItem): boolean {
+  return (item.type === 'screenshot' || item.type === 'image') && Boolean(item.imageDataUrl);
+}
+
+function getOcrActionLabel(item: SavedItem): string {
+  if (item.ocrStatus === 'processing') {
+    return 'OCR processing';
+  }
+
+  if (item.ocrStatus === 'failed') {
+    return 'Retry OCR';
+  }
+
+  if (item.extractedText) {
+    return 'Run OCR again';
+  }
+
+  return 'Run OCR';
 }

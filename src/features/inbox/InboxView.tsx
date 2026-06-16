@@ -1,4 +1,5 @@
-import { FileImage, Image, Link, Type } from 'lucide-react';
+import { CheckCircle2, FileImage, FolderOpen, Image, Link, Puzzle, ScanText, Type } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { SavedItem, SavedItemType } from '../../domain/savedItem';
 import { SavedItemCard } from '../../components/SavedItemCard';
 import { PageHeader } from '../../components/PageHeader';
@@ -55,6 +56,14 @@ export function InboxView({
   const inboxItems = items.filter((item) => item.status === 'active' && !item.projectId);
   const previewItems = inboxItems.slice(0, 3);
   const recentItems = inboxItems.slice(0, 4);
+  const ocrQueuedItems = inboxItems.filter(
+    (item) =>
+      (item.type === 'screenshot' || item.type === 'image') &&
+      !item.extractedText &&
+      Boolean(item.imageDataUrl || item.mimeType)
+  );
+  const ocrReadyItems = inboxItems.filter((item) => item.extractedText);
+  const needsReviewItems = inboxItems.slice(0, 3);
 
   return (
     <div className="page-stack">
@@ -114,6 +123,52 @@ export function InboxView({
         </p>
       </section>
 
+      <SurfaceCard as="section" className="content-section intake-review" aria-labelledby="intake-review-title">
+        <div className="section-header">
+          <div>
+            <h2 id="intake-review-title">Intake review</h2>
+            <p className="text-muted">New captures stay local until you assign a project or tag pass.</p>
+          </div>
+          <span className="status-badge status-badge--progress">Extension ready</span>
+        </div>
+
+        <div className="intake-review__grid" aria-label="Inbox intake status">
+          <IntakeMetric
+            icon={<FolderOpen size={18} strokeWidth={1.5} />}
+            label="Unassigned"
+            value={inboxItems.length}
+          />
+          <IntakeMetric
+            icon={<ScanText size={18} strokeWidth={1.5} />}
+            label="OCR queued"
+            value={ocrQueuedItems.length}
+          />
+          <IntakeMetric
+            icon={<CheckCircle2 size={18} strokeWidth={1.5} />}
+            label="OCR ready"
+            value={ocrReadyItems.length}
+          />
+          <IntakeMetric
+            icon={<Puzzle size={18} strokeWidth={1.5} />}
+            label="Review lane"
+            value={needsReviewItems.length}
+          />
+        </div>
+
+        {needsReviewItems.length > 0 ? (
+          <div className="intake-review__queue" aria-label="Items ready for review">
+            {needsReviewItems.map((item) => (
+              <button type="button" key={item.id} className="intake-review__item" onClick={() => onOpenDetail(item)}>
+                <span>{item.title}</span>
+                <small>{item.projectId ? 'Project assigned' : 'Needs project'}</small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state empty-state--compact">Inbox review is clear.</div>
+        )}
+      </SurfaceCard>
+
       <SurfaceCard as="section" className="content-section" aria-labelledby="recent-title">
         <div className="section-header">
           <div>
@@ -155,6 +210,26 @@ export function InboxView({
           <div className="empty-state">Save your first link, screenshot, or snippet above.</div>
         )}
       </SurfaceCard>
+    </div>
+  );
+}
+
+function IntakeMetric({
+  icon,
+  label,
+  value
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="intake-metric">
+      <span className="intake-metric__icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="intake-metric__value">{value}</span>
+      <span className="intake-metric__label">{label}</span>
     </div>
   );
 }
