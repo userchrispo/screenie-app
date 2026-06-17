@@ -1,7 +1,7 @@
 import type { DragEvent, ReactNode } from 'react';
 import { FileImage, Link, Type } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { CreateSavedItemInput, SavedItem } from '../../domain/savedItem';
+import type { CreateSavedItemInput } from '../../domain/savedItem';
 import { CommandKey } from '../../components/CommandKey';
 import { SurfaceCard } from '../../components/SurfaceCard';
 import { modShortcutKeys } from '../../lib/keyboardShortcuts';

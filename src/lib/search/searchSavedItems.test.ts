@@ -79,6 +79,22 @@ describe('searchSavedItems', () => {
     expect(results[0].matchedTerms).toEqual(expect.arrayContaining(['pricing', 'screenshot']));
   });
 
+  it('matches OCR-only extracted text for image captures', () => {
+    const results = searchSavedItems(items, {
+      text: 'transparent starter team',
+      filter: 'library',
+      sortBy: 'best-match'
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      item: { id: 'shot-pricing' },
+      matchedFields: expect.arrayContaining(['extractedText']),
+      matchedText: 'Simple transparent pricing starter pro team',
+      matchKind: 'text'
+    });
+  });
+
   it('supports type and tag filters for narrowed result sets', () => {
     const results = searchSavedItems(items, {
       text: 'pricing',

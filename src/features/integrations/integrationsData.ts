@@ -19,12 +19,20 @@ export const INTEGRATIONS: IntegrationItem[] = [
     statusVariant: 'active'
   },
   {
+    id: 'local-ocr',
+    name: 'Local OCR',
+    detail: 'Browser-side text recognition for images and screenshots',
+    status: 'active',
+    statusLabel: 'Active',
+    statusVariant: 'active'
+  },
+  {
     id: 'browser-extension',
     name: 'Browser extension',
-    detail: 'Quick capture from any tab',
-    status: 'coming',
-    statusLabel: 'Coming soon',
-    statusVariant: 'coming'
+    detail: 'App-side bridge ready for reviewed captures',
+    status: 'active',
+    statusLabel: 'Bridge ready',
+    statusVariant: 'progress'
   },
   {
     id: 'cloud-sync',

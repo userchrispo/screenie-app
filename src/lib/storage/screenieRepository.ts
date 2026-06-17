@@ -1,4 +1,4 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import {
   createProject,
   createSavedItem,
@@ -10,6 +10,7 @@ import {
   type ScreenieRepository,
   type UpdateSavedItemInput
 } from '../../domain/savedItem';
+import { createWorkspaceSnapshot, normalizeWorkspaceSnapshot } from '../../domain/workspaceSnapshot';
 import { seedItems, seedProjects } from './seedData';
 
 interface ScreenieDb extends DBSchema {
@@ -36,11 +37,21 @@ interface ScreenieDb extends DBSchema {
 }
 
 const DB_NAME = 'screenie-local';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const META_SEEDED_KEY = 'seeded';
 const META_DEMO_DISABLED_KEY = 'demo-seed-disabled';
 
 let dbPromise: Promise<IDBPDatabase<ScreenieDb>> | undefined;
+
+interface MigrationCursor {
+  value: unknown;
+  update(value: SavedItem): Promise<unknown>;
+  continue(): Promise<MigrationCursor | null>;
+}
+
+interface MigrationStore {
+  openCursor(): Promise<MigrationCursor | null>;
+}
 
 export const screenieRepository: ScreenieRepository = {
   async list() {
@@ -136,6 +147,35 @@ export const screenieRepository: ScreenieRepository = {
     await transaction.done;
   },
 
+  async exportWorkspace(now?: string) {
+    const db = await getDb();
+    const [items, projects] = await Promise.all([db.getAll('items'), db.getAll('projects')]);
+    return createWorkspaceSnapshot(sortNewest(items), sortProjects(projects), now);
+  },
+
+  async importWorkspace(snapshot) {
+    const normalized = normalizeWorkspaceSnapshot(snapshot);
+    const db = await getDb();
+    const transaction = db.transaction(['items', 'projects', 'meta'], 'readwrite');
+    const itemStore = transaction.objectStore('items');
+    const projectStore = transaction.objectStore('projects');
+    const metaStore = transaction.objectStore('meta');
+
+    await itemStore.clear();
+    await projectStore.clear();
+    await metaStore.clear();
+    await Promise.all(normalized.items.map((item) => itemStore.put(item)));
+    await Promise.all(normalized.projects.map((project) => projectStore.put(project)));
+    await metaStore.put({ key: META_SEEDED_KEY, value: 'true' });
+    await metaStore.put({ key: META_DEMO_DISABLED_KEY, value: 'true' });
+    await transaction.done;
+  },
+
+  async resetDemo() {
+    await this.clear();
+    await this.seed(seedItems, seedProjects);
+  },
+
   async seed(items: SavedItem[], projects: Project[] = seedProjects) {
     const db = await getDb();
     const transaction = db.transaction(['items', 'projects', 'meta'], 'readwrite');
@@ -187,7 +227,7 @@ export async function ensureSeeded() {
 
 function getDb() {
   dbPromise ??= openDB<ScreenieDb>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
+    async upgrade(db, oldVersion, _newVersion, transaction) {
       if (!db.objectStoreNames.contains('items')) {
         const items = db.createObjectStore('items', { keyPath: 'id' });
         items.createIndex('by-created', 'createdAt');
@@ -203,10 +243,70 @@ function getDb() {
         const projects = db.createObjectStore('projects', { keyPath: 'id' });
         projects.createIndex('by-created', 'createdAt');
       }
+
+      if (oldVersion < 3) {
+        await migrateItemsToVersion3(transaction.objectStore('items'));
+      }
     }
   });
 
   return dbPromise;
+}
+
+export async function resetScreenieRepositoryForTests() {
+  const db = await dbPromise?.catch(() => undefined);
+  db?.close();
+  dbPromise = undefined;
+}
+
+export async function deleteScreenieDatabaseForTests() {
+  await resetScreenieRepositoryForTests();
+  await deleteDB(DB_NAME);
+}
+
+async function migrateItemsToVersion3(store: MigrationStore) {
+  let cursor = await store.openCursor();
+
+  while (cursor) {
+    const migrated = addBetaMetadataDefaults(cursor.value as Partial<SavedItem>);
+    await cursor.update(migrated);
+    cursor = await cursor.continue();
+  }
+}
+
+function addBetaMetadataDefaults(item: Partial<SavedItem>): SavedItem {
+  const createdAt = item.createdAt ?? new Date().toISOString();
+  const updatedAt = item.updatedAt ?? createdAt;
+  const extractedText = cleanString(item.extractedText);
+
+  return {
+    id: cleanString(item.id) ?? `legacy-${Math.random().toString(36).slice(2, 12)}`,
+    type: item.type ?? 'snippet',
+    title: cleanString(item.title) ?? 'Untitled item',
+    description: cleanString(item.description),
+    url: cleanString(item.url),
+    text: cleanString(item.text),
+    extractedText,
+    imageDataUrl: cleanString(item.imageDataUrl),
+    mimeType: cleanString(item.mimeType),
+    sizeBytes: typeof item.sizeBytes === 'number' && Number.isFinite(item.sizeBytes) ? item.sizeBytes : undefined,
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    projectId: cleanString(item.projectId),
+    source: item.source ?? 'manual',
+    ocrStatus: item.ocrStatus ?? (extractedText ? 'ready' : 'not_applicable'),
+    ocrLanguage: cleanString(item.ocrLanguage),
+    ocrError: cleanString(item.ocrError),
+    ocrUpdatedAt: item.ocrUpdatedAt ?? (extractedText ? updatedAt : undefined),
+    isFavorite: item.isFavorite ?? false,
+    status: item.status ?? 'active',
+    createdAt,
+    updatedAt,
+    thumbnailColor: cleanString(item.thumbnailColor)
+  };
+}
+
+function cleanString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function sortNewest(items: SavedItem[]): SavedItem[] {

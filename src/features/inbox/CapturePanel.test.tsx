@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CapturePanel } from './CapturePanel';
 
@@ -10,10 +10,11 @@ describe('CapturePanel metadata', () => {
     render(<CapturePanel onCreate={onCreate} />);
 
     await user.click(screen.getByRole('button', { name: /Paste link/i }));
-    await user.type(screen.getByLabelText('Paste link'), 'https://screenie.app/pricing');
-    await user.type(screen.getByLabelText('Title'), 'Pricing page');
-    await user.clear(screen.getByLabelText('Tags'));
-    await user.type(screen.getByLabelText('Tags'), '#Pricing, Research');
+    fireEvent.change(screen.getByLabelText('Paste link'), {
+      target: { value: 'https://screenie.app/pricing' }
+    });
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Pricing page' } });
+    fireEvent.change(screen.getByLabelText('Tags'), { target: { value: '#Pricing, Research' } });
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(onCreate).toHaveBeenCalledWith(

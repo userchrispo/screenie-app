@@ -99,7 +99,7 @@ export function FindView({
 
       <p className="find-tip">
         <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
-        <span>Tip: You can search by anything — text, tags, names, dates, and more.</span>
+        <span>Tip: Search by text, tags, names, dates, OCR, and more.</span>
       </p>
     </div>
   );

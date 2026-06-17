@@ -1,8 +1,9 @@
 # Main Architect Status
 
 ## Now
-- Stabilization fixes are implemented on `stabilization/screenie-fixes`.
-- Focused regression checks are green for capture URL validation and functional Playwright flows.
+- Product Beta integration is complete on `codex/product-beta`.
+- Main owns architecture, package/config changes, integration, final verification, and merge decisions.
+- Product Beta target: local-first app with real browser OCR, richer capture/project/data workflows, and an extension-ready capture bridge.
 
 ## Done
 - Initialized git and attached `origin`.
@@ -21,22 +22,28 @@
   - Clear all data disables demo reseeding across reloads,
   - mobile navigation wraps within 320px and 390px viewports.
 - Added component and Playwright regression coverage for those fixes.
+- Verified current `main` before beta work: `npm run lint`, `npm test -- --run`, `npm run build`, and `npm run e2e` all passed.
+- Created fresh helper streams for frontend, search/data, and quality from current `main` context.
+- Integrated helper beta work from frontend, search/data, and quality into the app shell.
+- Added browser-side OCR, extension bridge review, project rename/delete, app-native permanent delete, and Settings export/import/reset wiring.
+- Added Product Beta regression coverage for Settings archive round trips, extension bridge confirmation, project persistence, and responsive console-clean checks at 320, 390, 768, 1024, and 1440 px.
+- Final verification passed: focused UI suite, focused data/OCR/storage suite, `npm run lint`, `npm test -- --run`, `npm run build`, and `npm run e2e`.
 
 ## Blocked
-- Helper stabilization threads are blocked on approval in their separate worktrees, so main implemented the fixes directly.
+- None.
 
 ## Next
-- Run full verification: `npm run lint`, `npm test`, `npm run build`, `npm run e2e`, and responsive browser screenshots.
-- Commit stabilization fixes, merge back to `main`, then push when stable.
+- Commit the integrated beta slice.
+- Prepare for the next product pass after commit review.
 
 ## Files touched
-- `src/features/inbox/CapturePanel.tsx`
-- `src/features/screenie/useSavedItems.ts`
-- `src/lib/storage/screenieRepository.ts`
-- `src/styles/global.css`
-- `src/test/features/CapturePanel.test.tsx`
-- `e2e/screenie-functional.spec.ts`
 - `docs/agents/main.md`
+- `docs/decisions.md`
+- `package.json`
+- `package-lock.json`
+- `src/App.tsx`
+- `src/styles/global.css`
+- `e2e/screenie-beta-regression.spec.ts`
 
 ## Needs from others
-- None for this stabilization pass.
+- None at this checkpoint.

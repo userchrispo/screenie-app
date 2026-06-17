@@ -6,10 +6,24 @@ import { SavedItemCard } from './components/SavedItemCard';
 import { SurfaceCard } from './components/SurfaceCard';
 import { FilterMenu } from './components/FilterMenu';
 import { ViewTransition } from './components/ViewTransition';
-import type { SavedItem, SavedItemType, ScreenieFilter, ScreenieSort, ScreenieView } from './domain/savedItem';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import type {
+  CreateSavedItemInput,
+  SavedItem,
+  SavedItemType,
+  ScreenieFilter,
+  ScreenieSort,
+  ScreenieView
+} from './domain/savedItem';
 import { normalizeTags } from './domain/savedItem';
+import {
+  captureDraftToCreateInput,
+  parseCaptureBridgeMessage,
+  type CaptureDraft
+} from './domain/captureDraft';
 import { FindView } from './features/find/FindView';
 import { InboxView } from './features/inbox/InboxView';
+import { ExtensionCaptureDialog } from './features/inbox/ExtensionCaptureDialog';
 import { LibraryView } from './features/library/LibraryView';
 import { TagsView } from './features/tags/TagsView';
 import { ItemDetailPanel } from './features/item/ItemDetailPanel';
@@ -21,6 +35,7 @@ import type { CaptureTemplate } from './features/templates/templatesData';
 import { useSavedItems } from './features/screenie/useSavedItems';
 import { searchSavedItems } from './lib/search/searchSavedItems';
 import { isModKey } from './lib/keyboardShortcuts';
+import { canRunOcr, recognizeImageText } from './lib/ocr/localOcr';
 
 const filterSubtitles: Record<ScreenieFilter, string> = {
   inbox: 'Uncategorized saves land here before you assign a project.',
@@ -55,6 +70,10 @@ export function App() {
   const [captureTemplate, setCaptureTemplate] = useState<CaptureTemplate | null>(null);
   const [captureFocusToken, setCaptureFocusToken] = useState(0);
   const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<SavedItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [extensionDraft, setExtensionDraft] = useState<CaptureDraft | null>(null);
+  const [extensionSaving, setExtensionSaving] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const {
@@ -67,7 +86,12 @@ export function App() {
     updateItem,
     deleteItem,
     createProject,
-    clearAll
+    renameProject,
+    removeProject,
+    clearAll,
+    exportWorkspace,
+    importWorkspace,
+    resetDemo
   } = useSavedItems();
 
   const availableTags = useMemo(() => {
@@ -158,12 +182,67 @@ export function App() {
     await updateItem(item.id, { status: 'active' });
   }
 
+  const runOcrForItem = useCallback(
+    async (item: SavedItem) => {
+      if (!canRunOcr(item) || !item.imageDataUrl) {
+        return;
+      }
+
+      const language = item.ocrLanguage ?? 'eng';
+      await updateItem(item.id, {
+        ocrStatus: 'processing',
+        ocrLanguage: language,
+        ocrError: null
+      });
+
+      try {
+        const result = await recognizeImageText(item.imageDataUrl, language);
+        await updateItem(item.id, {
+          extractedText: result.text || undefined,
+          ocrStatus: 'ready',
+          ocrLanguage: result.language,
+          ocrError: null
+        });
+      } catch (err) {
+        await updateItem(item.id, {
+          ocrStatus: 'failed',
+          ocrLanguage: language,
+          ocrError: err instanceof Error ? err.message : 'Local OCR failed.'
+        });
+      }
+    },
+    [updateItem]
+  );
+
+  const createItemWithOcr = useCallback(
+    async (input: CreateSavedItemInput) => {
+      const item = await createItem(input);
+      if (item.ocrStatus === 'queued' && canRunOcr(item)) {
+        void runOcrForItem(item);
+      }
+      return item;
+    },
+    [createItem, runOcrForItem]
+  );
+
   async function deletePermanently(item: SavedItem) {
-    if (window.confirm(`Delete "${item.title}" permanently?`)) {
-      await deleteItem(item.id);
-      if (selectedItemId === item.id) {
+    setPendingDeleteItem(item);
+  }
+
+  async function confirmDeletePermanently() {
+    if (!pendingDeleteItem) {
+      return;
+    }
+
+    setDeleteBusy(true);
+    try {
+      await deleteItem(pendingDeleteItem.id);
+      if (selectedItemId === pendingDeleteItem.id) {
         setSelectedItemId(null);
       }
+      setPendingDeleteItem(null);
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -181,6 +260,27 @@ export function App() {
   async function handleClearAll() {
     await clearAll();
     closeOverlays();
+  }
+
+  async function handleResetDemo() {
+    await resetDemo();
+    closeOverlays();
+  }
+
+  async function handleSaveExtensionDraft() {
+    if (!extensionDraft) {
+      return;
+    }
+
+    setExtensionSaving(true);
+    try {
+      const item = await createItemWithOcr(captureDraftToCreateInput(extensionDraft));
+      setExtensionDraft(null);
+      setSelectedItemId(item.id);
+      setActiveView('inbox');
+    } finally {
+      setExtensionSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -218,6 +318,25 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [closeOverlays, filterOpen, notificationsOpen, selectedItemId]);
 
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.source !== window) {
+        return;
+      }
+
+      const message = parseCaptureBridgeMessage(event.data);
+      if (!message) {
+        return;
+      }
+
+      setExtensionDraft(message.draft);
+      setActiveView('inbox');
+    }
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
   const cardHandlers = {
     onToggleFavorite: (item: SavedItem) => void toggleFavorite(item),
     onMoveToTrash: (item: SavedItem) => void moveToTrash(item),
@@ -250,6 +369,8 @@ export function App() {
           onSelectProject={handleSelectProject}
           onClearProject={() => setProjectId(null)}
           onAddProject={(name) => void createProject({ name })}
+          onRenameProject={(id, name) => void renameProject(id, name)}
+          onRemoveProject={(id) => void removeProject(id)}
         />
         <main className="app-main" aria-label="Screenie app">
           <div className="main-inner">
@@ -277,7 +398,7 @@ export function App() {
                   items={items}
                   isLoading={isLoading}
                   {...filterProps}
-                  onCreate={createItem}
+                  onCreate={createItemWithOcr}
                   initialCaptureMode={captureTemplate?.mode ?? null}
                   initialSnippet={captureTemplate?.mode === 'snippet' ? captureTemplate.body : ''}
                   initialLink={captureTemplate?.mode === 'link' ? captureTemplate.body : ''}
@@ -312,7 +433,12 @@ export function App() {
               ) : activeView === 'templates' ? (
                 <TemplatesView onSelectTemplate={handleSelectTemplate} />
               ) : activeView === 'settings' ? (
-                <SettingsView onClearAll={handleClearAll} />
+                <SettingsView
+                  onClearAll={handleClearAll}
+                  onExportWorkspace={exportWorkspace}
+                  onImportWorkspace={importWorkspace}
+                  onResetDemo={handleResetDemo}
+                />
               ) : (
                 <div className="saved-view page-stack">
                   <PageHeader
@@ -371,6 +497,7 @@ export function App() {
         onToggleFavorite={(item) => void toggleFavorite(item)}
         onMoveToTrash={(item) => void moveToTrash(item)}
         onDeletePermanently={(item) => void deletePermanently(item)}
+        onRunOcr={(item) => void runOcrForItem(item)}
       />
       <NotificationsPanel
         open={notificationsOpen}
@@ -380,6 +507,26 @@ export function App() {
           setNotificationsOpen(false);
           setSelectedItemId(item.id);
         }}
+      />
+      <ExtensionCaptureDialog
+        draft={extensionDraft}
+        saving={extensionSaving}
+        onSave={() => void handleSaveExtensionDraft()}
+        onClose={() => setExtensionDraft(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingDeleteItem)}
+        title="Delete permanently"
+        body={
+          pendingDeleteItem
+            ? `Delete "${pendingDeleteItem.title}" permanently? This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete permanently"
+        danger
+        busy={deleteBusy}
+        onConfirm={() => void confirmDeletePermanently()}
+        onClose={() => setPendingDeleteItem(null)}
       />
     </div>
   );

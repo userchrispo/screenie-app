@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Sidebar, type SidebarCounts } from './Sidebar';
 
@@ -37,7 +37,9 @@ describe('Sidebar project dialog', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create project' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a project name.');
 
-    await user.type(screen.getByLabelText('Project name'), 'Pricing research');
+    fireEvent.change(screen.getByLabelText('Project name'), {
+      target: { value: 'Pricing research' }
+    });
     await user.click(within(dialog).getByRole('button', { name: 'Create project' }));
 
     expect(onAddProject).toHaveBeenCalledWith('Pricing research');

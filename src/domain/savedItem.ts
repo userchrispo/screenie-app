@@ -1,5 +1,7 @@
 export type SavedItemType = 'link' | 'screenshot' | 'snippet' | 'image';
 export type SavedItemStatus = 'active' | 'trash';
+export type SavedItemSource = 'manual' | 'upload' | 'paste' | 'extension' | 'import' | 'seed';
+export type OcrStatus = 'not_applicable' | 'queued' | 'processing' | 'ready' | 'failed';
 export type ScreenieFilter = 'inbox' | 'library' | 'favorites' | 'tags' | 'trash';
 export type ScreenieSort = 'best-match' | 'newest' | 'oldest' | 'title';
 export type ScreenieView = ScreenieFilter | 'find' | 'integrations' | 'templates' | 'settings';
@@ -29,6 +31,11 @@ export interface SavedItem {
   sizeBytes?: number;
   tags: string[];
   projectId?: string;
+  source?: SavedItemSource;
+  ocrStatus?: OcrStatus;
+  ocrLanguage?: string;
+  ocrError?: string;
+  ocrUpdatedAt?: string;
   isFavorite: boolean;
   status: SavedItemStatus;
   createdAt: string;
@@ -48,6 +55,10 @@ export interface CreateSavedItemInput {
   sizeBytes?: number;
   tags?: string[];
   projectId?: string;
+  source?: SavedItemSource;
+  ocrStatus?: OcrStatus;
+  ocrLanguage?: string;
+  ocrError?: string;
   isFavorite?: boolean;
   status?: SavedItemStatus;
   createdAt?: string;
@@ -66,9 +77,20 @@ export interface UpdateSavedItemInput {
   sizeBytes?: number;
   tags?: string[];
   projectId?: string | null;
+  source?: SavedItemSource;
+  ocrStatus?: OcrStatus;
+  ocrLanguage?: string | null;
+  ocrError?: string | null;
   isFavorite?: boolean;
   status?: SavedItemStatus;
   thumbnailColor?: string;
+}
+
+export interface WorkspaceSnapshot {
+  version: 1;
+  exportedAt: string;
+  items: SavedItem[];
+  projects: Project[];
 }
 
 export interface SearchQuery {
@@ -105,6 +127,9 @@ export interface ScreenieRepository {
   createProject(input: CreateProjectInput): Promise<Project>;
   renameProject(id: string, name: string): Promise<Project>;
   removeProject(id: string): Promise<void>;
+  exportWorkspace(now?: string): Promise<WorkspaceSnapshot>;
+  importWorkspace(snapshot: WorkspaceSnapshot): Promise<void>;
+  resetDemo(): Promise<void>;
   seed(items: SavedItem[], projects?: Project[]): Promise<void>;
   clear(): Promise<void>;
 }
@@ -136,6 +161,11 @@ export function createSavedItem(input: CreateSavedItemInput): SavedItem {
     sizeBytes: input.sizeBytes,
     tags: normalizeTags(input.tags ?? []),
     projectId: cleanOptional(input.projectId),
+    source: input.source ?? 'manual',
+    ocrStatus: input.ocrStatus ?? 'not_applicable',
+    ocrLanguage: cleanOptional(input.ocrLanguage),
+    ocrError: cleanOptional(input.ocrError),
+    ocrUpdatedAt: hasOcrUpdate(input) ? now : undefined,
     isFavorite: input.isFavorite ?? false,
     status: input.status ?? 'active',
     createdAt,
@@ -149,6 +179,12 @@ export function updateSavedItem(
   input: UpdateSavedItemInput,
   now = new Date().toISOString()
 ): SavedItem {
+  const ocrChanged =
+    input.extractedText !== undefined ||
+    input.ocrStatus !== undefined ||
+    input.ocrLanguage !== undefined ||
+    input.ocrError !== undefined;
+
   return {
     ...existing,
     title: input.title === undefined ? existing.title : normalizeTitle(input.title),
@@ -167,6 +203,12 @@ export function updateSavedItem(
         : input.projectId === null
           ? undefined
           : input.projectId,
+    source: input.source ?? existing.source ?? 'manual',
+    ocrStatus: input.ocrStatus ?? existing.ocrStatus ?? 'not_applicable',
+    ocrLanguage:
+      input.ocrLanguage === undefined ? existing.ocrLanguage : cleanOptional(input.ocrLanguage),
+    ocrError: input.ocrError === undefined ? existing.ocrError : cleanOptional(input.ocrError),
+    ocrUpdatedAt: ocrChanged ? now : existing.ocrUpdatedAt,
     isFavorite: input.isFavorite ?? existing.isFavorite,
     status: input.status ?? existing.status,
     thumbnailColor:
@@ -195,9 +237,18 @@ function normalizeProjectName(name: string): string {
   return normalized.length > 0 ? normalized : 'Untitled project';
 }
 
-function cleanOptional(value?: string): string | undefined {
+function cleanOptional(value?: string | null): string | undefined {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
+}
+
+function hasOcrUpdate(input: CreateSavedItemInput): boolean {
+  return (
+    input.extractedText !== undefined ||
+    input.ocrStatus !== undefined ||
+    input.ocrLanguage !== undefined ||
+    input.ocrError !== undefined
+  );
 }
 
 function createId(): string {

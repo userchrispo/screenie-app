@@ -9,6 +9,8 @@ import {
   type ScreenieRepository,
   type UpdateSavedItemInput
 } from '../../domain/savedItem';
+import { createWorkspaceSnapshot, normalizeWorkspaceSnapshot } from '../../domain/workspaceSnapshot';
+import { seedItems, seedProjects } from './seedData';
 
 export function createMemoryScreenieRepository(
   initialItems: SavedItem[] = [],
@@ -89,6 +91,33 @@ export function createMemoryScreenieRepository(
         }
       }
       projects.delete(id);
+    },
+
+    async exportWorkspace(now?: string) {
+      return createWorkspaceSnapshot(Array.from(items.values()), Array.from(projects.values()), now);
+    },
+
+    async importWorkspace(snapshot) {
+      const normalized = normalizeWorkspaceSnapshot(snapshot);
+      items.clear();
+      projects.clear();
+      for (const item of normalized.items) {
+        items.set(item.id, item);
+      }
+      for (const project of normalized.projects) {
+        projects.set(project.id, project);
+      }
+    },
+
+    async resetDemo() {
+      items.clear();
+      projects.clear();
+      for (const item of seedItems) {
+        items.set(item.id, item);
+      }
+      for (const project of seedProjects) {
+        projects.set(project.id, project);
+      }
     },
 
     async seed(seedItems: SavedItem[], seedProjectsList: Project[] = []) {

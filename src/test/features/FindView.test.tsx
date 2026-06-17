@@ -87,6 +87,29 @@ describe('FindView', () => {
     expect(screen.getByRole('heading', { name: 'Our Pricing Plans - Screenie' })).toBeInTheDocument();
   });
 
+  it('finds screenshots by OCR-only text and marks the result as OCR-backed', () => {
+    const ocrOnlyFixture: SavedItem = {
+      id: 'fixture-ocr-only',
+      type: 'screenshot',
+      title: 'Receipt capture',
+      extractedText: 'Invoice zebra total 118 paid by card',
+      tags: ['receipt'],
+      isFavorite: false,
+      status: 'active',
+      createdAt: '2026-01-04T00:00:00.000Z',
+      updatedAt: '2026-01-04T00:00:00.000Z'
+    };
+
+    render(<FindViewHarness items={[...pricingFixtures, ocrOnlyFixture]} initialSearch="zebra 118" />);
+
+    expect(screen.getByText('1 results found')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Receipt capture' })).toBeInTheDocument();
+    expect(screen.getByText('OCR ready')).toBeInTheDocument();
+    expect(screen.getByText('Matched text')).toBeInTheDocument();
+    expect(screen.getByText(/Invoice zebra total 118/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Our Pricing Plans - Screenie' })).not.toBeInTheDocument();
+  });
+
   it('updates sort order from the header control', async () => {
     const user = userEvent.setup();
     render(<FindViewHarness items={pricingFixtures} initialSearch="pricing" />);

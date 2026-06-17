@@ -1,4 +1,9 @@
 import { createMemoryScreenieRepository } from './memoryScreenieRepository';
+import {
+  deleteScreenieDatabaseForTests,
+  resetScreenieRepositoryForTests,
+  screenieRepository
+} from './screenieRepository';
 import { seedItems, seedProjects } from './seedData';
 
 describe('createMemoryScreenieRepository', () => {
@@ -19,6 +24,9 @@ describe('createMemoryScreenieRepository', () => {
 
     expect(created.name).toBe('New project');
     expect((await repository.listProjects()).length).toBe(seedProjects.length + 1);
+
+    const renamed = await repository.renameProject(created.id, ' Renamed project ');
+    expect(renamed.name).toBe('Renamed project');
 
     const item = await repository.create({
       type: 'snippet',
@@ -75,5 +83,110 @@ describe('createMemoryScreenieRepository', () => {
 
     await repository.clear();
     expect(await repository.list()).toEqual([]);
+  });
+
+  it('exports, imports, and resets a local workspace', async () => {
+    const repository = createMemoryScreenieRepository(seedItems, seedProjects);
+    const snapshot = await repository.exportWorkspace('2026-06-10T15:00:00.000Z');
+
+    expect(snapshot).toMatchObject({
+      version: 1,
+      exportedAt: '2026-06-10T15:00:00.000Z'
+    });
+    expect(snapshot.items).toHaveLength(seedItems.length);
+    expect(snapshot.projects).toHaveLength(seedProjects.length);
+
+    await repository.clear();
+    expect(await repository.list()).toEqual([]);
+
+    await repository.importWorkspace(snapshot);
+    expect(await repository.list()).toHaveLength(seedItems.length);
+    expect(await repository.listProjects()).toHaveLength(seedProjects.length);
+
+    await repository.clear();
+    await repository.resetDemo();
+    expect(await repository.list()).toHaveLength(seedItems.length);
+    expect(await repository.listProjects()).toHaveLength(seedProjects.length);
+  });
+});
+
+describe('screenieRepository IndexedDB migrations', () => {
+  beforeEach(async () => {
+    await deleteScreenieDatabaseForTests();
+  });
+
+  afterEach(async () => {
+    await deleteScreenieDatabaseForTests();
+  });
+
+  it('adds beta OCR/source defaults to existing saved items', async () => {
+    const legacyDb = await indexedDB.open('screenie-local', 2);
+
+    await new Promise<void>((resolve, reject) => {
+      legacyDb.onupgradeneeded = () => {
+        const db = legacyDb.result;
+        const items = db.createObjectStore('items', { keyPath: 'id' });
+        items.createIndex('by-created', 'createdAt');
+        items.createIndex('by-status', 'status');
+        items.createIndex('by-type', 'type');
+        const projects = db.createObjectStore('projects', { keyPath: 'id' });
+        projects.createIndex('by-created', 'createdAt');
+        db.createObjectStore('meta', { keyPath: 'key' });
+      };
+      legacyDb.onerror = () => reject(legacyDb.error);
+      legacyDb.onsuccess = () => resolve();
+    });
+
+    const db = legacyDb.result;
+    const transaction = db.transaction(['items', 'meta'], 'readwrite');
+    transaction.objectStore('items').put({
+      id: 'legacy-image',
+      type: 'image',
+      title: 'Legacy image',
+      extractedText: 'OCR text from the old shape',
+      tags: ['legacy'],
+      isFavorite: false,
+      status: 'active',
+      createdAt: '2026-06-10T12:00:00.000Z',
+      updatedAt: '2026-06-10T12:30:00.000Z'
+    });
+    transaction.objectStore('meta').put({ key: 'seeded', value: 'true' });
+
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+    await resetScreenieRepositoryForTests();
+
+    const items = await screenieRepository.list();
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: 'legacy-image',
+      source: 'manual',
+      ocrStatus: 'ready',
+      ocrUpdatedAt: '2026-06-10T12:30:00.000Z'
+    });
+  });
+
+  it('exports and imports workspace snapshots through IndexedDB', async () => {
+    await screenieRepository.clear();
+    await screenieRepository.seed([seedItems[0]], [seedProjects[0]]);
+
+    const snapshot = await screenieRepository.exportWorkspace('2026-06-10T15:00:00.000Z');
+
+    expect(snapshot).toMatchObject({
+      version: 1,
+      exportedAt: '2026-06-10T15:00:00.000Z',
+      items: [{ id: seedItems[0].id }],
+      projects: [{ id: seedProjects[0].id }]
+    });
+
+    await screenieRepository.clear();
+    await screenieRepository.importWorkspace(snapshot);
+
+    expect(await screenieRepository.list()).toHaveLength(1);
+    expect(await screenieRepository.listProjects()).toHaveLength(1);
   });
 });

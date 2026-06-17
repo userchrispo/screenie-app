@@ -4,7 +4,8 @@ import type {
   CreateSavedItemInput,
   Project,
   SavedItem,
-  UpdateSavedItemInput
+  UpdateSavedItemInput,
+  WorkspaceSnapshot
 } from '../../domain/savedItem';
 import { screenieRepository } from '../../lib/storage/screenieRepository';
 
@@ -71,8 +72,40 @@ export function useSavedItems() {
     [reload]
   );
 
+  const renameProject = useCallback(
+    async (id: string, name: string) => {
+      const project = await screenieRepository.renameProject(id, name);
+      await reload();
+      return project;
+    },
+    [reload]
+  );
+
+  const removeProject = useCallback(
+    async (id: string) => {
+      await screenieRepository.removeProject(id);
+      await reload();
+    },
+    [reload]
+  );
+
   const clearAll = useCallback(async () => {
     await screenieRepository.clear();
+    await reload();
+  }, [reload]);
+
+  const exportWorkspace = useCallback(async () => screenieRepository.exportWorkspace(), []);
+
+  const importWorkspace = useCallback(
+    async (snapshot: WorkspaceSnapshot) => {
+      await screenieRepository.importWorkspace(snapshot);
+      await reload();
+    },
+    [reload]
+  );
+
+  const resetDemo = useCallback(async () => {
+    await screenieRepository.resetDemo();
     await reload();
   }, [reload]);
 
@@ -99,6 +132,11 @@ export function useSavedItems() {
     updateItem,
     deleteItem,
     createProject,
-    clearAll
+    renameProject,
+    removeProject,
+    clearAll,
+    exportWorkspace,
+    importWorkspace,
+    resetDemo
   };
 }

@@ -49,14 +49,16 @@ test('filters tags from the tags view', async ({ page }) => {
 });
 
 test('deletes an item permanently from trash', async ({ page }) => {
-  page.on('dialog', (dialog) => dialog.accept());
-
   await page.getByRole('button', { name: 'Find' }).click();
   await page.getByLabel('Search everything in Screenie').fill('onboarding');
   await page.getByRole('button', { name: 'Move User onboarding flow to trash', exact: true }).click();
 
   await page.getByRole('button', { name: /Trash/ }).click();
   await page.getByRole('button', { name: /Delete User onboarding flow permanently/i }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete permanently' })
+    .getByRole('button', { name: 'Delete permanently' })
+    .click();
 
   await expect(page.getByRole('heading', { name: 'User onboarding flow' })).not.toBeVisible();
 });
@@ -82,10 +84,14 @@ test('uploads an image and finds it in search', async ({ page }) => {
 });
 
 test('clear all data keeps the workspace empty after reload', async ({ page }) => {
-  page.on('dialog', (dialog) => dialog.accept());
-
   await page.getByLabel('Settings', { exact: true }).click();
   await page.getByRole('button', { name: 'Clear all data' }).click();
+  await expect(page.getByRole('dialog', { name: 'Clear all data' })).toBeVisible();
+  await page
+    .getByRole('dialog', { name: 'Clear all data' })
+    .getByRole('button', { name: 'Clear all data' })
+    .click();
+  await expect(page.getByRole('status')).toHaveText('Local workspace cleared.');
 
   await page.reload();
 
