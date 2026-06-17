@@ -64,9 +64,12 @@ export function InboxView({
   );
   const ocrReadyItems = inboxItems.filter((item) => item.extractedText);
   const needsReviewItems = inboxItems.slice(0, 3);
+  const topTags = getTopTags(inboxItems, 5);
+  const typeCounts = getTypeCounts(inboxItems);
+  const latestItem = inboxItems[0];
 
   return (
-    <div className="page-stack">
+    <div className="inbox-view page-stack dashboard-view dashboard-view--inbox">
       <PageHeader
         titleId="inbox-title"
         title="Inbox"
@@ -85,7 +88,8 @@ export function InboxView({
         }
       />
 
-      <section className="capture-stage" aria-label="Capture workspace">
+      <div className="dashboard-layout dashboard-layout--inbox" aria-labelledby="inbox-title">
+        <section className="capture-stage dashboard-layout__main inbox-dashboard__capture" aria-label="Capture workspace">
         <div className="capture-decor" aria-hidden={previewItems.length === 0}>
           <div className="pastel-field" aria-hidden="true" />
           {previewItems.length > 0 ? (
@@ -123,7 +127,11 @@ export function InboxView({
         </p>
       </section>
 
-      <SurfaceCard as="section" className="content-section intake-review" aria-labelledby="intake-review-title">
+      <SurfaceCard
+        as="section"
+        className="content-section intake-review dashboard-layout__aside dashboard-rail-card"
+        aria-labelledby="intake-review-title"
+      >
         <div className="section-header">
           <div>
             <h2 id="intake-review-title">Intake review</h2>
@@ -132,7 +140,7 @@ export function InboxView({
           <span className="status-badge status-badge--progress">Extension ready</span>
         </div>
 
-        <div className="intake-review__grid" aria-label="Inbox intake status">
+        <div className="intake-review__grid dashboard-metric-grid" aria-label="Inbox intake status">
           <IntakeMetric
             icon={<FolderOpen size={18} strokeWidth={1.5} />}
             label="Unassigned"
@@ -169,7 +177,57 @@ export function InboxView({
         )}
       </SurfaceCard>
 
-      <SurfaceCard as="section" className="content-section" aria-labelledby="recent-title">
+      <SurfaceCard
+        as="section"
+        className="content-section dashboard-layout__aside dashboard-rail-card inbox-dashboard__memory"
+        aria-labelledby="inbox-memory-title"
+      >
+        <div className="section-header">
+          <div>
+            <h2 id="inbox-memory-title">Memory map</h2>
+            <p className="text-muted">A quick read on what this inbox is becoming.</p>
+          </div>
+        </div>
+
+        <div className="inbox-dashboard__type-stack" aria-label="Inbox content breakdown">
+          <DashboardBreakdown label="Links" value={typeCounts.link} total={inboxItems.length} />
+          <DashboardBreakdown label="Screenshots" value={typeCounts.screenshot} total={inboxItems.length} />
+          <DashboardBreakdown label="Images" value={typeCounts.image} total={inboxItems.length} />
+          <DashboardBreakdown label="Snippets" value={typeCounts.snippet} total={inboxItems.length} />
+        </div>
+
+        {topTags.length > 0 ? (
+          <div className="inbox-dashboard__tag-cloud" aria-label="Top inbox tags">
+            {topTags.map(({ tag, count }) => (
+              <button key={tag} type="button" className="tag-chip" onClick={() => onTagClick(tag)}>
+                {tag}
+                <span>{count}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state empty-state--compact">Tags will appear as captures are organized.</div>
+        )}
+
+        {latestItem ? (
+          <button
+            type="button"
+            className="inbox-dashboard__latest"
+            onClick={() => onOpenDetail(latestItem)}
+            aria-label={`Open latest save ${latestItem.title}`}
+          >
+            <span>Latest save</span>
+            <strong>{latestItem.title}</strong>
+            <small>{getReadableType(latestItem.type)}</small>
+          </button>
+        ) : null}
+      </SurfaceCard>
+
+      <SurfaceCard
+        as="section"
+        className="content-section dashboard-layout__main dashboard-section dashboard-section--recent inbox-dashboard__recent"
+        aria-labelledby="recent-title"
+      >
         <div className="section-header">
           <div>
             <h2 id="recent-title">Recently saved</h2>
@@ -177,13 +235,13 @@ export function InboxView({
           </div>
           <div className="type-summary" aria-label="Saved item types">
             <span>
-              <FileImage size={18} strokeWidth={1.5} /> Screenshots
+              <FileImage size={18} strokeWidth={1.5} /> {typeCounts.screenshot} Screenshots
             </span>
             <span>
-              <Link size={18} strokeWidth={1.5} /> Links
+              <Link size={18} strokeWidth={1.5} /> {typeCounts.link} Links
             </span>
             <span>
-              <Type size={18} strokeWidth={1.5} /> Snippets
+              <Type size={18} strokeWidth={1.5} /> {typeCounts.snippet} Snippets
             </span>
           </div>
         </div>
@@ -193,7 +251,7 @@ export function InboxView({
             Loading saved content...
           </div>
         ) : recentItems.length > 0 ? (
-          <div className="item-list">
+          <div className="item-list dashboard-card-grid inbox-dashboard__recent-grid">
             {recentItems.map((item) => (
               <SavedItemCard
                 key={item.id}
@@ -210,6 +268,7 @@ export function InboxView({
           <div className="empty-state">Save your first link, screenshot, or snippet above.</div>
         )}
       </SurfaceCard>
+      </div>
     </div>
   );
 }
@@ -288,6 +347,55 @@ function getFloatPositionClass(type: SavedItem['type'], index: number): string {
   }
 
   return index % 2 === 0 ? 'float-shot' : 'float-text';
+}
+
+function getTypeCounts(items: SavedItem[]): Record<SavedItemType, number> {
+  return items.reduce<Record<SavedItemType, number>>(
+    (counts, item) => ({
+      ...counts,
+      [item.type]: counts[item.type] + 1
+    }),
+    {
+      image: 0,
+      link: 0,
+      screenshot: 0,
+      snippet: 0
+    }
+  );
+}
+
+function getTopTags(items: SavedItem[], limit: number): Array<{ tag: string; count: number }> {
+  const counts = new Map<string, number>();
+
+  items.forEach((item) => {
+    item.tags.forEach((tag) => {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    });
+  });
+
+  return Array.from(counts, ([tag, count]) => ({ tag, count }))
+    .sort((first, second) => second.count - first.count || first.tag.localeCompare(second.tag))
+    .slice(0, limit);
+}
+
+function DashboardBreakdown({ label, value, total }: { label: string; value: number; total: number }) {
+  const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+
+  return (
+    <div className="dashboard-breakdown">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{percentage}%</small>
+    </div>
+  );
+}
+
+function getReadableType(type: SavedItemType): string {
+  if (type === 'screenshot') {
+    return 'Screenshot';
+  }
+
+  return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
 function truncate(value: string, max: number): string {
