@@ -22,7 +22,7 @@ export function createWorkspaceSnapshot(
   return {
     version: SNAPSHOT_VERSION,
     exportedAt,
-    items: items.map(normalizeSavedItemForSnapshot),
+    items: items.map((item) => normalizeSavedItemForSnapshot(item)),
     projects: projects.map(normalizeProjectForSnapshot)
   };
 }
@@ -51,15 +51,18 @@ export function normalizeWorkspaceSnapshot(value: unknown): WorkspaceSnapshot {
     throw new Error('Import file is missing items or projects.');
   }
 
+  const projects = value.projects.map(normalizeProjectForSnapshot);
+  const projectIds = new Set(projects.map((project) => project.id));
+
   return {
     version: SNAPSHOT_VERSION,
     exportedAt: stringValue(value.exportedAt) ?? new Date().toISOString(),
-    items: value.items.map(normalizeSavedItemForSnapshot),
-    projects: value.projects.map(normalizeProjectForSnapshot)
+    items: value.items.map((item) => normalizeSavedItemForSnapshot(item, projectIds)),
+    projects
   };
 }
 
-function normalizeSavedItemForSnapshot(value: unknown): SavedItem {
+function normalizeSavedItemForSnapshot(value: unknown, projectIds?: Set<string>): SavedItem {
   if (!isRecord(value)) {
     throw new Error('Import file contains an invalid saved item.');
   }
@@ -69,6 +72,7 @@ function normalizeSavedItemForSnapshot(value: unknown): SavedItem {
   const title = requiredString(value.title, 'saved item title').trim() || 'Untitled item';
   const createdAt = requiredString(value.createdAt, 'saved item createdAt');
   const updatedAt = requiredString(value.updatedAt, 'saved item updatedAt');
+  const projectId = stringValue(value.projectId);
 
   return {
     id,
@@ -82,14 +86,14 @@ function normalizeSavedItemForSnapshot(value: unknown): SavedItem {
     mimeType: stringValue(value.mimeType),
     sizeBytes: numberValue(value.sizeBytes),
     tags: Array.isArray(value.tags) ? normalizeTags(value.tags) : [],
-    projectId: stringValue(value.projectId),
+    projectId: projectIds === undefined || (projectId && projectIds.has(projectId)) ? projectId : undefined,
     source: enumValue(value.source ?? 'manual', ITEM_SOURCES, 'saved item source'),
     ocrStatus: enumValue(value.ocrStatus ?? 'not_applicable', OCR_STATUSES, 'OCR status'),
     ocrLanguage: stringValue(value.ocrLanguage),
     ocrError: stringValue(value.ocrError),
     ocrUpdatedAt: stringValue(value.ocrUpdatedAt),
     isFavorite: Boolean(value.isFavorite),
-    status: enumValue(value.status, ITEM_STATUSES, 'saved item status'),
+    status: enumValue(value.status ?? 'active', ITEM_STATUSES, 'saved item status'),
     createdAt,
     updatedAt,
     thumbnailColor: stringValue(value.thumbnailColor)

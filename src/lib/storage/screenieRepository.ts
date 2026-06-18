@@ -86,19 +86,19 @@ export const screenieRepository: ScreenieRepository = {
   },
 
   async trash(id: string) {
-    return this.update(id, { status: 'trash' });
+    return screenieRepository.update(id, { status: 'trash' });
   },
 
   async restore(id: string) {
-    return this.update(id, { status: 'active' });
+    return screenieRepository.update(id, { status: 'active' });
   },
 
   async toggleFavorite(id: string) {
-    const existing = await this.get(id);
+    const existing = await screenieRepository.get(id);
     if (!existing) {
       throw new Error(`Saved item not found: ${id}`);
     }
-    return this.update(id, { isFavorite: !existing.isFavorite });
+    return screenieRepository.update(id, { isFavorite: !existing.isFavorite });
   },
 
   async remove(id: string) {
@@ -172,8 +172,8 @@ export const screenieRepository: ScreenieRepository = {
   },
 
   async resetDemo() {
-    await this.clear();
-    await this.seed(seedItems, seedProjects);
+    await screenieRepository.clear();
+    await screenieRepository.seed(seedItems, seedProjects);
   },
 
   async seed(items: SavedItem[], projects: Project[] = seedProjects) {

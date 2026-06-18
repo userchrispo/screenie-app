@@ -75,6 +75,30 @@ describe('createMemoryScreenieRepository', () => {
     expect(restored.status).toBe('active');
   });
 
+  it('keeps item actions callable when repository methods are destructured', async () => {
+    const repository = createMemoryScreenieRepository();
+    const created = await repository.create({
+      type: 'snippet',
+      title: 'Detached actions',
+      text: 'Contract check',
+      now: '2026-06-10T12:00:00.000Z'
+    });
+    const { trash, restore, toggleFavorite } = repository;
+
+    expect((await trash(created.id)).status).toBe('trash');
+    expect((await restore(created.id)).status).toBe('active');
+    expect((await toggleFavorite(created.id)).isFavorite).toBe(true);
+  });
+
+  it('uses starter projects when seed is called without explicit projects', async () => {
+    const repository = createMemoryScreenieRepository();
+
+    await repository.seed([seedItems[0]]);
+
+    expect(await repository.list()).toHaveLength(1);
+    expect(await repository.listProjects()).toHaveLength(seedProjects.length);
+  });
+
   it('clears and removes items', async () => {
     const repository = createMemoryScreenieRepository(seedItems);
 
@@ -188,5 +212,24 @@ describe('screenieRepository IndexedDB migrations', () => {
 
     expect(await screenieRepository.list()).toHaveLength(1);
     expect(await screenieRepository.listProjects()).toHaveLength(1);
+  });
+
+  it('keeps IndexedDB item actions callable when repository methods are destructured', async () => {
+    await screenieRepository.clear();
+    const created = await screenieRepository.create({
+      type: 'snippet',
+      title: 'IndexedDB detached actions',
+      text: 'Contract check',
+      now: '2026-06-10T12:00:00.000Z'
+    });
+    const { trash, restore, toggleFavorite, resetDemo } = screenieRepository;
+
+    expect((await trash(created.id)).status).toBe('trash');
+    expect((await restore(created.id)).status).toBe('active');
+    expect((await toggleFavorite(created.id)).isFavorite).toBe(true);
+
+    await resetDemo();
+    expect(await screenieRepository.list()).toHaveLength(seedItems.length);
+    expect(await screenieRepository.listProjects()).toHaveLength(seedProjects.length);
   });
 });

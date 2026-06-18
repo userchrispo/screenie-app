@@ -19,6 +19,30 @@ export function createMemoryScreenieRepository(
   const items = new Map(initialItems.map((item) => [item.id, item]));
   const projects = new Map(initialProjects.map((project) => [project.id, project]));
 
+  async function updateItem(id: string, input: UpdateSavedItemInput) {
+    const existing = items.get(id);
+    if (!existing) {
+      throw new Error(`Saved item not found: ${id}`);
+    }
+    const updated = updateSavedItem(existing, input);
+    items.set(id, updated);
+    return updated;
+  }
+
+  async function seedWorkspace(nextItems: SavedItem[], nextProjects: Project[] = seedProjects) {
+    for (const item of nextItems) {
+      items.set(item.id, item);
+    }
+    for (const project of nextProjects) {
+      projects.set(project.id, project);
+    }
+  }
+
+  async function clearWorkspace() {
+    items.clear();
+    projects.clear();
+  }
+
   return {
     async list() {
       return sortNewest(Array.from(items.values()));
@@ -34,22 +58,14 @@ export function createMemoryScreenieRepository(
       return item;
     },
 
-    async update(id: string, input: UpdateSavedItemInput) {
-      const existing = items.get(id);
-      if (!existing) {
-        throw new Error(`Saved item not found: ${id}`);
-      }
-      const updated = updateSavedItem(existing, input);
-      items.set(id, updated);
-      return updated;
-    },
+    update: updateItem,
 
     async trash(id: string) {
-      return this.update(id, { status: 'trash' });
+      return updateItem(id, { status: 'trash' });
     },
 
     async restore(id: string) {
-      return this.update(id, { status: 'active' });
+      return updateItem(id, { status: 'active' });
     },
 
     async toggleFavorite(id: string) {
@@ -57,7 +73,7 @@ export function createMemoryScreenieRepository(
       if (!existing) {
         throw new Error(`Saved item not found: ${id}`);
       }
-      return this.update(id, { isFavorite: !existing.isFavorite });
+      return updateItem(id, { isFavorite: !existing.isFavorite });
     },
 
     async remove(id: string) {
@@ -110,29 +126,13 @@ export function createMemoryScreenieRepository(
     },
 
     async resetDemo() {
-      items.clear();
-      projects.clear();
-      for (const item of seedItems) {
-        items.set(item.id, item);
-      }
-      for (const project of seedProjects) {
-        projects.set(project.id, project);
-      }
+      await clearWorkspace();
+      await seedWorkspace(seedItems, seedProjects);
     },
 
-    async seed(seedItems: SavedItem[], seedProjectsList: Project[] = []) {
-      for (const item of seedItems) {
-        items.set(item.id, item);
-      }
-      for (const project of seedProjectsList) {
-        projects.set(project.id, project);
-      }
-    },
+    seed: seedWorkspace,
 
-    async clear() {
-      items.clear();
-      projects.clear();
-    }
+    clear: clearWorkspace
   };
 }
 

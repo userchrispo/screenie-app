@@ -49,6 +49,20 @@ describe('createSavedItem', () => {
       ocrUpdatedAt: '2026-06-10T12:00:00.000Z'
     });
   });
+
+  it('does not stamp OCR metadata for non-image captures without OCR content', () => {
+    const item = createSavedItem({
+      type: 'link',
+      title: 'Extension link',
+      url: 'https://screenie.app',
+      source: 'extension',
+      ocrStatus: 'not_applicable',
+      now: '2026-06-10T12:00:00.000Z'
+    });
+
+    expect(item.ocrStatus).toBe('not_applicable');
+    expect(item.ocrUpdatedAt).toBeUndefined();
+  });
 });
 
 describe('updateSavedItem', () => {
@@ -101,5 +115,44 @@ describe('updateSavedItem', () => {
       ocrUpdatedAt: '2026-06-10T13:00:00.000Z'
     });
     expect(updated.ocrError).toBeUndefined();
+  });
+
+  it('trims assigned project ids and clears blank assignments', () => {
+    const item = createSavedItem({
+      type: 'snippet',
+      title: 'Project note',
+      now: '2026-06-10T12:00:00.000Z'
+    });
+
+    const assigned = updateSavedItem(
+      item,
+      { projectId: '  project-alpha  ' },
+      '2026-06-10T13:00:00.000Z'
+    );
+    const cleared = updateSavedItem(
+      assigned,
+      { projectId: '   ' },
+      '2026-06-10T14:00:00.000Z'
+    );
+
+    expect(assigned.projectId).toBe('project-alpha');
+    expect(cleared.projectId).toBeUndefined();
+  });
+
+  it('does not stamp OCR metadata when a non-image item receives not-applicable OCR status', () => {
+    const item = createSavedItem({
+      type: 'snippet',
+      title: 'Plain text note',
+      now: '2026-06-10T12:00:00.000Z'
+    });
+
+    const updated = updateSavedItem(
+      item,
+      { ocrStatus: 'not_applicable' },
+      '2026-06-10T13:00:00.000Z'
+    );
+
+    expect(updated.ocrStatus).toBe('not_applicable');
+    expect(updated.ocrUpdatedAt).toBeUndefined();
   });
 });

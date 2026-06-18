@@ -1,8 +1,8 @@
 # Search/Data Engineer Status
 
 ## Now
-- Product Beta data-layer slice is implemented on `codex/product-beta`.
-- Scoped data/domain/search/storage tests, full Vitest, lint, build, and E2E are green.
+- Backend/data hardening pass is implemented on the current worktree.
+- Scoped data/domain/storage tests, full Vitest, lint, build, and E2E are green.
 
 ## Done
 - Added additive search result contract fields for match terms, matched tags, match kind, and human-readable match summaries.
@@ -18,13 +18,18 @@
 - Added repository `exportWorkspace`, `importWorkspace`, and `resetDemo` methods for memory and IndexedDB implementations.
 - Added IndexedDB v3 migration coverage that backfills OCR/source defaults for existing v2 records.
 - Added search coverage for OCR-only `extractedText` matches.
+- Hardened saved-item normalization so blank project assignments clear safely and non-image captures do not receive noisy OCR timestamps.
+- Hardened workspace import normalization so legacy records without status import as active and orphan project assignments are cleared.
+- Removed `this` coupling from repository action methods so destructured storage actions remain callable.
+- Aligned memory repository seed behavior with IndexedDB starter-project defaults.
+- Verified current pass: `npm test -- src\domain src\lib\storage`, `npm test`, `npm run lint`, `npm run build`, and `npm run e2e` all pass.
 
 ## Blocked
 - No data-layer blocker.
-- Previous frontend/quality test failures were resolved without data-layer behavior changes.
+- Frontend helper confirmed the item-detail build blocker is resolved; no data-layer action needed.
 
 ## Next
-- Support the next product pass after the integrated beta slice is committed.
+- Support the next product pass after the hardening slice is reviewed/committed.
 
 ## Files touched
 - `src/domain/savedItem.ts`

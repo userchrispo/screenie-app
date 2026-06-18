@@ -165,7 +165,7 @@ export function createSavedItem(input: CreateSavedItemInput): SavedItem {
     ocrStatus: input.ocrStatus ?? 'not_applicable',
     ocrLanguage: cleanOptional(input.ocrLanguage),
     ocrError: cleanOptional(input.ocrError),
-    ocrUpdatedAt: hasOcrUpdate(input) ? now : undefined,
+    ocrUpdatedAt: hasOcrUpdate(input.type, input) ? now : undefined,
     isFavorite: input.isFavorite ?? false,
     status: input.status ?? 'active',
     createdAt,
@@ -179,11 +179,7 @@ export function updateSavedItem(
   input: UpdateSavedItemInput,
   now = new Date().toISOString()
 ): SavedItem {
-  const ocrChanged =
-    input.extractedText !== undefined ||
-    input.ocrStatus !== undefined ||
-    input.ocrLanguage !== undefined ||
-    input.ocrError !== undefined;
+  const ocrChanged = hasOcrUpdate(existing.type, input);
 
   return {
     ...existing,
@@ -200,9 +196,7 @@ export function updateSavedItem(
     projectId:
       input.projectId === undefined
         ? existing.projectId
-        : input.projectId === null
-          ? undefined
-          : input.projectId,
+        : cleanOptional(input.projectId),
     source: input.source ?? existing.source ?? 'manual',
     ocrStatus: input.ocrStatus ?? existing.ocrStatus ?? 'not_applicable',
     ocrLanguage:
@@ -242,13 +236,25 @@ function cleanOptional(value?: string | null): string | undefined {
   return normalized ? normalized : undefined;
 }
 
-function hasOcrUpdate(input: CreateSavedItemInput): boolean {
+function hasOcrUpdate(
+  type: SavedItemType,
+  input: {
+    extractedText?: string;
+    ocrStatus?: OcrStatus;
+    ocrLanguage?: string | null;
+    ocrError?: string | null;
+  }
+): boolean {
   return (
     input.extractedText !== undefined ||
-    input.ocrStatus !== undefined ||
     input.ocrLanguage !== undefined ||
-    input.ocrError !== undefined
+    input.ocrError !== undefined ||
+    (isOcrCapableType(type) && input.ocrStatus !== undefined)
   );
+}
+
+function isOcrCapableType(type: SavedItemType): boolean {
+  return type === 'image' || type === 'screenshot';
 }
 
 function createId(): string {
