@@ -2,6 +2,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { Clipboard, FileText, Image as ImageIcon, Link2, Star, Trash2, X } from 'lucide-react';
 import type { Project, SavedItem } from '../../domain/savedItem';
 import { formatBytes, formatItemDate } from '../../lib/format';
+import { getSavedItemPreviewImage } from '../../lib/previewImages';
 import { SurfaceCard } from '../../components/SurfaceCard';
 import { SettingsSection } from '../../components/SettingsSection';
 
@@ -35,6 +36,9 @@ export function ItemDetailPanel({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedElement = useRef<HTMLElement | null>(null);
   const activeItemId = item?.id;
+  const previewImage = item ? getSavedItemPreviewImage(item) : undefined;
+  const [failedPreviewImage, setFailedPreviewImage] = useState<string | null>(null);
+  const shouldShowPreviewImage = Boolean(previewImage && failedPreviewImage !== previewImage);
 
   useEffect(() => {
     if (!item) {
@@ -60,6 +64,10 @@ export function ItemDetailPanel({
       previouslyFocusedElement.current = null;
     };
   }, [activeItemId]);
+
+  useEffect(() => {
+    setFailedPreviewImage(null);
+  }, [previewImage]);
 
   if (!item) {
     return null;
@@ -170,9 +178,17 @@ export function ItemDetailPanel({
             </div>
 
             <div className="detail-panel__preview" data-preview-type={currentItem.type}>
-              {currentItem.imageDataUrl ? (
+              {shouldShowPreviewImage ? (
                 <figure className="detail-panel__preview-media">
-                  <img className="detail-panel__image" src={currentItem.imageDataUrl} alt={currentItem.title} />
+                  <img
+                    className="detail-panel__image"
+                    src={previewImage}
+                    alt={currentItem.title}
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedPreviewImage(previewImage ?? null)}
+                  />
                 </figure>
               ) : (
                 <div className="detail-panel__preview-empty" aria-label={`${typeLabel} preview`}>

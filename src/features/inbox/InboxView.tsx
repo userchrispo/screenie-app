@@ -1,11 +1,12 @@
 import { CheckCircle2, FileImage, FolderOpen, Image, Link, Puzzle, ScanText, Type } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { SavedItem, SavedItemType } from '../../domain/savedItem';
 import { SavedItemCard } from '../../components/SavedItemCard';
 import { PageHeader } from '../../components/PageHeader';
 import { SurfaceCard } from '../../components/SurfaceCard';
 import { FilterMenu } from '../../components/FilterMenu';
 import { formatBytes } from '../../lib/format';
+import { getSavedItemPreviewImage } from '../../lib/previewImages';
 import { CapturePanel } from './CapturePanel';
 
 interface InboxViewProps {
@@ -293,11 +294,18 @@ function IntakeMetric({
 
 function FloatingPreview({ item }: { item: SavedItem }) {
   if (item.type === 'link') {
+    const previewImage = getSavedItemPreviewImage(item);
+
     return (
       <>
-        <span className="icon-slot">
-          <Link size={24} strokeWidth={1.5} />
-        </span>
+        <MiniPreviewImage
+          src={previewImage}
+          fallback={
+            <span className="icon-slot">
+              <Link size={24} strokeWidth={1.5} />
+            </span>
+          }
+        />
         <span>{item.url ? truncate(item.url, 28) : item.title}</span>
       </>
     );
@@ -316,9 +324,9 @@ function FloatingPreview({ item }: { item: SavedItem }) {
 
   return (
     <>
-      {item.imageDataUrl ? (
-        <span className="mini-preview" style={{ backgroundImage: `url(${item.imageDataUrl})` }} />
-      ) : (
+      <MiniPreviewImage
+        src={getSavedItemPreviewImage(item)}
+        fallback={
         <span className="icon-slot">
           {item.type === 'image' ? (
             <Image size={24} strokeWidth={1.5} />
@@ -326,12 +334,39 @@ function FloatingPreview({ item }: { item: SavedItem }) {
             <FileImage size={24} strokeWidth={1.5} />
           )}
         </span>
-      )}
+        }
+      />
       <div>
         <strong>{truncate(item.title, 22)}</strong>
         <span>{formatBytes(item.sizeBytes) ?? 'PNG'}</span>
       </div>
     </>
+  );
+}
+
+function MiniPreviewImage({ src, fallback }: { src: string | undefined; fallback: ReactNode }) {
+  const [failedPreviewImage, setFailedPreviewImage] = useState<string | null>(null);
+  const shouldShowPreviewImage = Boolean(src && failedPreviewImage !== src);
+
+  useEffect(() => {
+    setFailedPreviewImage(null);
+  }, [src]);
+
+  if (!shouldShowPreviewImage) {
+    return <>{fallback}</>;
+  }
+
+  return (
+    <span className="mini-preview">
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailedPreviewImage(src ?? null)}
+      />
+    </span>
   );
 }
 
