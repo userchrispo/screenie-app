@@ -2,22 +2,24 @@
 
 ## Now
 - Product Beta UI audit pass complete for owned frontend files.
+- Local beta readiness modal keyboard/focus checks are wired for Settings, extension review, item detail, project dialogs, and permanent delete confirmation.
 
 ## Done
 - Added capture metadata fields for link, snippet, and image intake without changing app/storage contracts.
 - Replaced browser prompt project creation with an app-native project dialog in the sidebar.
 - Replaced settings `window.confirm` clear flow with an app-native confirmation dialog.
-- Added Settings import/export/reset UI states and documented that real actions need main-thread data wiring.
+- Added Settings import/export/reset UI states with main-thread data actions wired through the app shell.
 - Added Inbox intake review metrics for unassigned items, OCR queued/ready, and extension intake readiness.
 - Added OCR ready/queued badges on saved item cards and OCR copy/queued actions in item detail.
 - Added colocated tests for capture metadata, settings clear dialog, and sidebar project dialog.
+- Added local beta E2E coverage for project rename/delete, item detail edit lifecycle, invalid archive import, extension bridge rejection/confirmation, rejected image uploads, and modal keyboard behavior.
+- Marked hidden Inbox floating previews decorative so users do not tab into or click controls hidden behind the capture panel.
 
 ## Blocked
-- Working Settings import/export/reset needs the app shell/storage layer to pass workspace items, projects, import handlers, and reset/seed handlers into `SettingsView`.
+- No known frontend blocker for the local beta readiness pass.
 
 ## Next
-- Main can wire Settings data actions when storage ownership is available.
-- Quality can decide whether to mirror the colocated tests into `src/test/` conventions.
+- Continue visual polish against `screenie-capture.png` and `screenie-find.png` if stricter design parity becomes a release requirement.
 
 ## Files touched
 - `docs/agents/frontend.md`
@@ -28,9 +30,10 @@
 - `src/features/inbox/CapturePanel.tsx`
 - `src/features/inbox/InboxView.tsx`
 - `src/features/item/ItemDetailPanel.tsx`
+- `src/features/inbox/ExtensionCaptureDialog.tsx`
 - `src/features/settings/SettingsView.test.tsx`
 - `src/features/settings/SettingsView.tsx`
 - `src/styles/global.css`
 
 ## Needs from others
-- Main: add SettingsView props/handlers for real archive export, archive import review, and reset-to-seed flows.
+- None at this checkpoint.

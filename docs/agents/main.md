@@ -1,7 +1,7 @@
 # Main Architect Status
 
 ## Now
-- Product Beta integration is complete on `codex/product-beta`.
+- Local beta readiness coverage is implemented on the current worktree.
 - Main owns architecture, package/config changes, integration, final verification, and merge decisions.
 - Product Beta target: local-first app with real browser OCR, richer capture/project/data workflows, and an extension-ready capture bridge.
 
@@ -28,13 +28,15 @@
 - Added browser-side OCR, extension bridge review, project rename/delete, app-native permanent delete, and Settings export/import/reset wiring.
 - Added Product Beta regression coverage for Settings archive round trips, extension bridge confirmation, project persistence, and responsive console-clean checks at 320, 390, 768, 1024, and 1440 px.
 - Final verification passed: focused UI suite, focused data/OCR/storage suite, `npm run lint`, `npm test -- --run`, `npm run build`, and `npm run e2e`.
+- Added local beta readiness coverage for project rename/delete, assigned item survival, item detail edit/favorite/trash/delete lifecycle, invalid Settings import, malformed extension bridge drafts, rejected uploads, and modal focus/Escape behavior.
+- Added `APP.md` local beta runbook with supported workflows, local data behavior, OCR notes, verification commands, and non-goals.
+- Latest readiness checks passed: `npx playwright test e2e/screenie-local-beta-readiness.spec.ts`.
 
 ## Blocked
 - None.
 
 ## Next
-- Commit the integrated beta slice.
-- Prepare for the next product pass after commit review.
+- Run final local beta verification gates and commit the readiness slice.
 
 ## Files touched
 - `docs/agents/main.md`

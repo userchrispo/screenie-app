@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { SurfaceCard } from './SurfaceCard';
 
 interface ConfirmDialogProps {
@@ -24,6 +25,14 @@ export function ConfirmDialog({
   onConfirm,
   onClose
 }: ConfirmDialogProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      closeButtonRef.current?.focus();
+    }
+  }, [open]);
+
   if (!open) {
     return null;
   }
@@ -37,10 +46,21 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            onClose();
+          }
+        }}
       >
         <div className="modal-panel__header">
           <h2 id="confirm-dialog-title">{title}</h2>
-          <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="icon-button"
+            aria-label="Close dialog"
+            onClick={onClose}
+          >
             <X size={18} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>

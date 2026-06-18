@@ -95,17 +95,15 @@ export function InboxView({
           {previewItems.length > 0 ? (
             <div className="floating-cards" aria-label="Recent inbox previews">
               {previewItems.slice(0, 3).map((item, index) => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
                   className={`float-card-button ${getFloatPositionClass(item.type, index)}`}
-                  onClick={() => onOpenDetail(item)}
-                  aria-label={`Open ${item.title}`}
+                  aria-hidden="true"
                 >
                   <SurfaceCard className="float-card">
                     <FloatingPreview item={item} />
                   </SurfaceCard>
-                </button>
+                </div>
               ))}
             </div>
           ) : null}

@@ -1,5 +1,5 @@
 import { Download, RotateCcw, Trash2, Upload, X } from 'lucide-react';
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { SettingsSection } from '../../components/SettingsSection';
 import { SurfaceCard } from '../../components/SurfaceCard';
@@ -262,6 +262,7 @@ function DataFlowDialog({
   onConfirmImport: () => void;
   onConfirmReset: () => void;
 }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const copy = getDialogCopy(dialog);
   const action = getDialogAction(dialog, {
     busy,
@@ -273,6 +274,10 @@ function DataFlowDialog({
     onConfirmReset
   });
 
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
   return (
     <div className="app-overlay app-overlay--center" role="presentation" onClick={onClose}>
       <SurfaceCard
@@ -282,10 +287,21 @@ function DataFlowDialog({
         aria-modal="true"
         aria-labelledby="data-dialog-title"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            onClose();
+          }
+        }}
       >
         <div className="modal-panel__header">
           <h2 id="data-dialog-title">{copy.title}</h2>
-          <button type="button" className="icon-button" aria-label="Close data dialog" onClick={onClose}>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="icon-button"
+            aria-label="Close data dialog"
+            onClick={onClose}
+          >
             <X size={18} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>

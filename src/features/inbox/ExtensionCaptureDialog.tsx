@@ -1,4 +1,5 @@
 import { FileImage, Link, Type, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import type { CaptureDraft } from '../../domain/captureDraft';
 import { SurfaceCard } from '../../components/SurfaceCard';
 
@@ -15,6 +16,14 @@ export function ExtensionCaptureDialog({
   onSave,
   onClose
 }: ExtensionCaptureDialogProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (draft) {
+      closeButtonRef.current?.focus();
+    }
+  }, [draft]);
+
   if (!draft) {
     return null;
   }
@@ -28,10 +37,21 @@ export function ExtensionCaptureDialog({
         aria-modal="true"
         aria-labelledby="extension-capture-title"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            onClose();
+          }
+        }}
       >
         <div className="modal-panel__header">
           <h2 id="extension-capture-title">Review extension capture</h2>
-          <button type="button" className="icon-button" aria-label="Close extension capture" onClick={onClose}>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="icon-button"
+            aria-label="Close extension capture"
+            onClick={onClose}
+          >
             <X size={18} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
