@@ -76,7 +76,12 @@ test('uploads an image and finds it in search', async ({ page }) => {
     )
   });
 
-  await expect(page.getByText('Image saved.')).toBeVisible();
+  await expect(page.getByLabel('Images ready to save')).toContainText('pricing-screen.png');
+  await expect(page.getByRole('region', { name: 'Capture saved content' }).getByRole('status')).toHaveText(
+    '1 image ready to review.'
+  );
+  await page.getByRole('button', { name: 'Save image' }).click();
+  await expect(page.getByText('1 image saved. OCR queued.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Find' }).click();
   await page.getByLabel('Search everything in Screenie').fill('pricing-screen');

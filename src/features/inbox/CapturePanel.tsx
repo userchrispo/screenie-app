@@ -1,13 +1,19 @@
 import type { DragEvent, ReactNode } from 'react';
 import { FileImage, Link, Type } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CreateSavedItemInput } from '../../domain/savedItem';
 import { CommandKey } from '../../components/CommandKey';
 import { SurfaceCard } from '../../components/SurfaceCard';
 import { modShortcutKeys } from '../../lib/keyboardShortcuts';
 
 type CaptureMode = 'link' | 'image' | 'snippet' | null;
+type ImageSource = 'paste' | 'upload';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+interface PendingImage {
+  file: File;
+  source: ImageSource;
+}
 
 interface CapturePanelProps {
   onCreate: (input: CreateSavedItemInput) => Promise<unknown>;
@@ -32,6 +38,7 @@ export function CapturePanel({
   const [snippetTitleValue, setSnippetTitleValue] = useState('');
   const [snippetTagsValue, setSnippetTagsValue] = useState('snippet, intake');
   const [imageTagsValue, setImageTagsValue] = useState('image, intake');
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [message, setMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -64,12 +71,81 @@ export function CapturePanel({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setActiveMode(null);
+        setPendingImages([]);
       }
     }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  const stageFiles = useCallback((files: FileList | File[], source: ImageSource) => {
+    const imageFiles = Array.from(files);
+    const accepted = imageFiles.filter((file) => file.type.startsWith('image/') && file.size <= MAX_IMAGE_BYTES);
+    const rejected = imageFiles.length - accepted.length;
+
+    if (accepted.length === 0) {
+      setPendingImages([]);
+      setActiveMode('image');
+      setMessage(rejected > 0 ? 'Choose image files under 10 MB.' : 'Choose an image first.');
+      return;
+    }
+
+    setPendingImages(accepted.map((file) => ({ file, source })));
+    setActiveMode('image');
+    setMessage(
+      `${accepted.length} ${accepted.length === 1 ? 'image' : 'images'} ready to review.${
+        rejected > 0 ? ` ${rejected} skipped.` : ''
+      }`
+    );
+  }, []);
+
+  const handleClipboardData = useCallback(
+    (clipboardData: DataTransfer | null) => {
+      if (!clipboardData) {
+        return false;
+      }
+
+      const files = getClipboardFiles(clipboardData);
+      if (files.length > 0) {
+        stageFiles(files, 'paste');
+        return true;
+      }
+
+      const text = clipboardData.getData('text/plain') || clipboardData.getData('text');
+      if (!text.trim()) {
+        return false;
+      }
+
+      if (parseUrl(text)) {
+        setLinkValue(text.trim());
+        setActiveMode('link');
+        setMessage('Clipboard URL ready to review.');
+        return true;
+      }
+
+      setSnippetValue(text);
+      setActiveMode('snippet');
+      setMessage('Clipboard text ready to review.');
+      return true;
+    },
+    [stageFiles]
+  );
+
+  useEffect(() => {
+    function onPaste(event: ClipboardEvent) {
+      if (event.defaultPrevented || isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (handleClipboardData(event.clipboardData)) {
+        event.preventDefault();
+      }
+    }
+
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [handleClipboardData]);
 
   async function saveLink() {
     if (!linkValue.trim()) {
@@ -118,44 +194,44 @@ export function CapturePanel({
     setMessage('Snippet saved.');
   }
 
-  async function saveFiles(files: FileList | File[]) {
-    const imageFiles = Array.from(files);
-    const accepted = imageFiles.filter((file) => file.type.startsWith('image/') && file.size <= MAX_IMAGE_BYTES);
-    const rejected = imageFiles.length - accepted.length;
+  const saveFile = useCallback(
+    async (file: File, source: ImageSource) => {
+      const imageDataUrl = await fileToDataUrl(file);
+      const type = file.name.toLowerCase().includes('screen') ? 'screenshot' : 'image';
+      const action = source === 'paste' ? 'Pasted' : 'Uploaded';
+      await onCreate({
+        type,
+        title: file.name.replace(/\.[^.]+$/, '') || `${action} image`,
+        text: `${action} ${type} ${file.name}. OCR queued for review.`,
+        imageDataUrl,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        tags: normalizeCaptureTags(imageTagsValue, [type, 'intake']),
+        source,
+        ocrStatus: 'queued',
+        ocrLanguage: 'eng',
+        thumbnailColor: 'hero'
+      });
+    },
+    [imageTagsValue, onCreate]
+  );
 
-    if (accepted.length === 0) {
-      setMessage(rejected > 0 ? 'Choose image files under 10 MB.' : 'Choose an image first.');
+  async function savePendingImages() {
+    if (pendingImages.length === 0) {
+      setMessage('Choose an image first.');
       return;
     }
 
-    for (const file of accepted) {
-      await saveFile(file);
+    for (const pendingImage of pendingImages) {
+      await saveFile(pendingImage.file, pendingImage.source);
     }
 
+    const savedCount = pendingImages.length;
+    setPendingImages([]);
     setActiveMode(null);
     setMessage(
-      `${accepted.length} ${accepted.length === 1 ? 'image' : 'images'} saved. OCR queued.${
-        rejected > 0 ? ` ${rejected} skipped.` : ''
-      }`
+      `${savedCount} ${savedCount === 1 ? 'image' : 'images'} saved. OCR queued.`
     );
-  }
-
-  async function saveFile(file: File) {
-    const imageDataUrl = await fileToDataUrl(file);
-    const type = file.name.toLowerCase().includes('screen') ? 'screenshot' : 'image';
-    await onCreate({
-      type,
-      title: file.name.replace(/\.[^.]+$/, '') || 'Uploaded image',
-      text: `Uploaded ${type} ${file.name}. OCR queued for review.`,
-      imageDataUrl,
-      mimeType: file.type,
-      sizeBytes: file.size,
-      tags: normalizeCaptureTags(imageTagsValue, [type, 'intake']),
-      source: 'upload',
-      ocrStatus: 'queued',
-      ocrLanguage: 'eng',
-      thumbnailColor: 'hero'
-    });
   }
 
   async function pasteClipboardText(target: 'link' | 'snippet') {
@@ -172,10 +248,12 @@ export function CapturePanel({
 
     if (target === 'link') {
       setLinkValue(text.trim());
+      setMessage('Clipboard URL ready to review.');
       return;
     }
 
     setSnippetValue(text);
+    setMessage('Clipboard text ready to review.');
   }
 
   async function pasteClipboardImage() {
@@ -195,11 +273,23 @@ export function CapturePanel({
       const file = new File([blob], `clipboard-${new Date().toISOString().replace(/[:.]/g, '-')}.png`, {
         type: imageType
       });
-      await saveFiles([file]);
+      stageFiles([file], 'paste');
       return;
     }
 
     setMessage('No image found on the clipboard.');
+  }
+
+  function handleImageDragOver(event: DragEvent<Element>) {
+    event.preventDefault();
+  }
+
+  function handleImageDrop(event: DragEvent<Element>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer.files.length > 0) {
+      stageFiles(event.dataTransfer.files, 'upload');
+    }
   }
 
   return (
@@ -208,6 +298,8 @@ export function CapturePanel({
       as="section"
       className="capture-panel"
       aria-label="Capture saved content"
+      onDragOver={handleImageDragOver}
+      onDrop={handleImageDrop}
     >
       <div className="capture-grid">
         <CaptureTile
@@ -266,13 +358,8 @@ export function CapturePanel({
           shortcut={modShortcutKeys('Shift', 'V')}
           shortcutLabel="Paste image shortcut"
           className="drop-tile"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            if (event.dataTransfer.files.length > 0) {
-              void saveFiles(event.dataTransfer.files);
-            }
-          }}
+          onDragOver={handleImageDragOver}
+          onDrop={handleImageDrop}
         >
           <label htmlFor="image-input">Drop screenshot</label>
           <div className="capture-metadata-grid" aria-label="Image metadata">
@@ -284,7 +371,23 @@ export function CapturePanel({
               placeholder="image, intake"
             />
           </div>
-          <p className="capture-helper">OCR status: queued after save.</p>
+          {pendingImages.length > 0 ? (
+            <div className="pending-image-list" aria-label="Images ready to save">
+              <strong>
+                {pendingImages.length} {pendingImages.length === 1 ? 'image' : 'images'} ready
+              </strong>
+              <ul>
+                {pendingImages.map(({ file, source }) => (
+                  <li key={`${source}-${file.name}-${file.size}`}>
+                    <span>{file.name}</span>
+                    <small>{source === 'paste' ? 'Pasted from clipboard' : 'Added from file or drop'}</small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="capture-helper">Paste, drop, or choose screenshots/images. OCR queues after save.</p>
+          )}
           <input
             ref={fileInputRef}
             id="image-input"
@@ -293,10 +396,14 @@ export function CapturePanel({
             multiple
             onChange={(event) => {
               if (event.target.files?.length) {
-                void saveFiles(event.target.files);
+                stageFiles(event.target.files, 'upload');
               }
+              event.target.value = '';
             }}
           />
+          <button type="button" disabled={pendingImages.length === 0} onClick={() => void savePendingImages()}>
+            {pendingImages.length === 1 ? 'Save image' : 'Save images'}
+          </button>
           <button type="button" onClick={() => fileInputRef.current?.click()}>
             Choose image
           </button>
@@ -457,6 +564,31 @@ function normalizeCaptureTags(value: string, defaults: string[]): string[] {
     .filter(Boolean);
 
   return Array.from(new Set(tags));
+}
+
+function getClipboardFiles(clipboardData: DataTransfer): File[] {
+  const directFiles = Array.from(clipboardData.files ?? []);
+  if (directFiles.length > 0) {
+    return directFiles;
+  }
+
+  return Array.from(clipboardData.items ?? [])
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable
+  );
 }
 
 function fileToDataUrl(file: File): Promise<string> {
