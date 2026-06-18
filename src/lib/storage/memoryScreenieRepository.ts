@@ -9,6 +9,8 @@ import {
   type ScreenieRepository,
   type UpdateSavedItemInput
 } from '../../domain/savedItem';
+import { createWorkspaceSnapshot, normalizeWorkspaceSnapshot } from '../../domain/workspaceSnapshot';
+import { seedItems, seedProjects } from './seedData';
 
 export function createMemoryScreenieRepository(
   initialItems: SavedItem[] = [],
@@ -16,6 +18,30 @@ export function createMemoryScreenieRepository(
 ): ScreenieRepository {
   const items = new Map(initialItems.map((item) => [item.id, item]));
   const projects = new Map(initialProjects.map((project) => [project.id, project]));
+
+  async function updateItem(id: string, input: UpdateSavedItemInput) {
+    const existing = items.get(id);
+    if (!existing) {
+      throw new Error(`Saved item not found: ${id}`);
+    }
+    const updated = updateSavedItem(existing, input);
+    items.set(id, updated);
+    return updated;
+  }
+
+  async function seedWorkspace(nextItems: SavedItem[], nextProjects: Project[] = seedProjects) {
+    for (const item of nextItems) {
+      items.set(item.id, item);
+    }
+    for (const project of nextProjects) {
+      projects.set(project.id, project);
+    }
+  }
+
+  async function clearWorkspace() {
+    items.clear();
+    projects.clear();
+  }
 
   return {
     async list() {
@@ -32,22 +58,14 @@ export function createMemoryScreenieRepository(
       return item;
     },
 
-    async update(id: string, input: UpdateSavedItemInput) {
-      const existing = items.get(id);
-      if (!existing) {
-        throw new Error(`Saved item not found: ${id}`);
-      }
-      const updated = updateSavedItem(existing, input);
-      items.set(id, updated);
-      return updated;
-    },
+    update: updateItem,
 
     async trash(id: string) {
-      return this.update(id, { status: 'trash' });
+      return updateItem(id, { status: 'trash' });
     },
 
     async restore(id: string) {
-      return this.update(id, { status: 'active' });
+      return updateItem(id, { status: 'active' });
     },
 
     async toggleFavorite(id: string) {
@@ -55,7 +73,7 @@ export function createMemoryScreenieRepository(
       if (!existing) {
         throw new Error(`Saved item not found: ${id}`);
       }
-      return this.update(id, { isFavorite: !existing.isFavorite });
+      return updateItem(id, { isFavorite: !existing.isFavorite });
     },
 
     async remove(id: string) {
@@ -91,19 +109,30 @@ export function createMemoryScreenieRepository(
       projects.delete(id);
     },
 
-    async seed(seedItems: SavedItem[], seedProjectsList: Project[] = []) {
-      for (const item of seedItems) {
+    async exportWorkspace(now?: string) {
+      return createWorkspaceSnapshot(Array.from(items.values()), Array.from(projects.values()), now);
+    },
+
+    async importWorkspace(snapshot) {
+      const normalized = normalizeWorkspaceSnapshot(snapshot);
+      items.clear();
+      projects.clear();
+      for (const item of normalized.items) {
         items.set(item.id, item);
       }
-      for (const project of seedProjectsList) {
+      for (const project of normalized.projects) {
         projects.set(project.id, project);
       }
     },
 
-    async clear() {
-      items.clear();
-      projects.clear();
-    }
+    async resetDemo() {
+      await clearWorkspace();
+      await seedWorkspace(seedItems, seedProjects);
+    },
+
+    seed: seedWorkspace,
+
+    clear: clearWorkspace
   };
 }
 

@@ -1,36 +1,34 @@
 # Quality Engineer Status
 
 ## Now
-- Merged into `main`. Gap-filling e2e and component tests are integrated and passing.
+- Product Beta regression coverage is reconciled with the integrated app shell.
+- Final quality gates are green on `codex/product-beta`.
 
 ## Done
-- Merged `origin/main` (MVP at `8c9ca97`) into `feature/quality-e2e` without blind conflict resolution.
-- Verification: `npm test` 11 passed; `npm run e2e` 7 passed; `npm run lint` passed.
-- Added shared Playwright storage reset helper at `e2e/helpers/resetStorage.ts`.
-- Updated foundation smoke for Inbox shell and console-error guard.
-- Unskipped quality gap e2e: seeded search/sort/count, sidebar Favorites/Trash, top-bar search routing.
-- Added component tests for `CapturePanel` and `FindView` under `src/test/features/`.
-- Updated `src/test/quality-coverage-plan.md` with executable vs blocked coverage.
+- Added OCR-only search coverage in `src/test/features/FindView.test.tsx`.
+- Added stubbed external-intake prefill coverage in `src/test/features/CapturePanel.test.tsx`.
+- Added quality-owned project create/rename/delete data contract coverage in `src/test/productBetaContracts.test.ts`.
+- Added Product Beta Playwright checks in `e2e/screenie-beta-regression.spec.ts` for app-native project creation persistence and responsive console-clean smoke at 320, 390, 768, 1024, and 1440 px.
+- Updated the clear-all E2E path in `e2e/screenie-functional.spec.ts` to use the current app-native data dialog.
+- Updated `src/test/quality-coverage-plan.md` with executable coverage and Product Beta blockers.
+- Verified the app shell now exposes project controls, Settings import/export/reset handlers, extension bridge review, and app-native permanent-delete confirmation.
+- Added browser regression coverage for Settings export/import/reset and extension bridge confirmation-before-save.
+- Verified `npm run lint`, `npm test -- --run`, `npm run build`, and `npm run e2e`.
 
 ## Blocked
-- Image capture e2e (file input / drag-drop).
-- Stub UI controls (`Integrations`, `Templates`, `Notifications`, `Settings`, `Filter items`, `All items`).
-- Visual regression vs product PNG references.
-- Favorite-toggle dedicated e2e (next slice).
+- No known quality-owned blocker after app-shell wiring.
 
 ## Next
-- Add image upload e2e once a stable file-fixture pattern is chosen.
-- Add favorites toggle e2e and Library/Tags view assertions.
-- Introduce responsive snapshot checks after stub controls ship.
+- Extend E2E coverage for project rename/delete UI in the next pass if those workflows need release-level assurance.
 
 ## Files touched
-- `e2e/helpers/resetStorage.ts`
-- `e2e/screenie-foundation.spec.ts`
-- `e2e/screenie-mvp-flows.spec.ts`
+- `e2e/screenie-beta-regression.spec.ts`
+- `e2e/screenie-functional.spec.ts`
 - `src/test/features/CapturePanel.test.tsx`
 - `src/test/features/FindView.test.tsx`
+- `src/test/productBetaContracts.test.ts`
 - `src/test/quality-coverage-plan.md`
 - `docs/agents/quality.md`
 
 ## Needs from others
-- Frontend should wire stub nav/toolbar buttons before those flows can be tested.
+- None at this checkpoint.

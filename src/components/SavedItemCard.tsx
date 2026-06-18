@@ -36,6 +36,7 @@ export function SavedItemCard({
   onDeletePermanently
 }: SavedItemCardProps) {
   const meta = getItemMeta(item);
+  const ocrStatus = getOcrStatus(item);
   const previewText = matchedText ?? item.text ?? item.description ?? 'No preview available.';
   const matchLabel = matchedText ? 'Matched text' : matchSummary ? 'Why it matched' : 'Saved text';
 
@@ -57,7 +58,7 @@ export function SavedItemCard({
         <div className="item-kicker">
           <ItemTypeIcon type={item.type} size={18} strokeWidth={1.5} />
           <span>{meta}</span>
-          {item.extractedText ? <span className="ocr-chip">OCR</span> : null}
+          {ocrStatus ? <span className={`ocr-chip ocr-chip--${ocrStatus.variant}`}>{ocrStatus.label}</span> : null}
         </div>
         <h3>{item.title}</h3>
         {item.url ? <p className="item-url">{item.url}</p> : null}
@@ -184,6 +185,30 @@ function HighlightedText({ text, highlight }: { text: string; highlight: string 
       {after}
     </>
   );
+}
+
+function getOcrStatus(item: SavedItem): { label: string; variant: 'ready' | 'queued' | 'processing' | 'failed' } | null {
+  if (item.type !== 'screenshot' && item.type !== 'image') {
+    return null;
+  }
+
+  if (item.ocrStatus === 'ready' || item.extractedText) {
+    return { label: 'OCR ready', variant: 'ready' };
+  }
+
+  if (item.ocrStatus === 'processing') {
+    return { label: 'OCR processing', variant: 'processing' };
+  }
+
+  if (item.ocrStatus === 'failed') {
+    return { label: 'OCR failed', variant: 'failed' };
+  }
+
+  if (item.ocrStatus === 'queued' || item.imageDataUrl || item.mimeType) {
+    return { label: 'OCR queued', variant: 'queued' };
+  }
+
+  return null;
 }
 
 function ItemTypeIcon({

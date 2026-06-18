@@ -10,8 +10,10 @@ describe('Workspace views', () => {
 
     expect(screen.getByRole('heading', { name: 'Integrations' })).toBeInTheDocument();
     expect(screen.getByText('Local storage')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    expect(screen.getByText('Local OCR')).toBeInTheDocument();
+    expect(screen.getAllByText('Active')).toHaveLength(2);
+    expect(screen.getByText('Bridge ready')).toBeInTheDocument();
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
   });
 
   it('renders templates and selects one', async () => {
@@ -26,7 +28,14 @@ describe('Workspace views', () => {
   });
 
   it('renders settings sections', () => {
-    render(<SettingsView onClearAll={async () => undefined} />);
+    render(
+      <SettingsView
+        onClearAll={async () => undefined}
+        onExportWorkspace={async () => ({ version: 1, exportedAt: '2026-06-16T12:00:00.000Z', items: [], projects: [] })}
+        onImportWorkspace={async () => undefined}
+        onResetDemo={async () => undefined}
+      />
+    );
 
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByText('Keyboard shortcuts')).toBeInTheDocument();

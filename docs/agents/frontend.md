@@ -1,34 +1,39 @@
 # Frontend Engineer Status
 
 ## Now
-- Full App Design Alignment complete: flat design system, workspace pages, shell redesign.
+- Product Beta UI audit pass complete for owned frontend files.
+- Local beta readiness modal keyboard/focus checks are wired for Settings, extension review, item detail, project dialogs, and permanent delete confirmation.
 
 ## Done
-- **Phase 1 — Design tokens + primitives:** `--surface*` tokens, `SurfaceCard`, `StatusBadge`, `SectionLabel`, `SetupCard`, `SettingsSection`, `.popover-panel` in `global.css`.
-- **Phase 2 — Shell:** workspace pill, WORKSPACE nav (Integrations/Templates/Settings) as routed views, compact quick-save footer; flat top-bar search (no glass).
-- **Phase 3 — Workspace pages:** `IntegrationsView`, `TemplatesView`, `SettingsView`; removed modal `*Panel` overlays; `ScreenieView` extended.
-- **Phase 4 — List views:** `GlassPanel` → `SurfaceCard` in Inbox/Library/Tags/Favorites/Trash; `SavedItemCard` uses flat surface wrapper.
-- **Phase 5 — Capture stage:** hero `SurfaceCard`, softer pastel field, float previews capped at 3 with flat cards.
-- **Phase 6 — Overlays:** `FilterMenu` popover-panel; `ItemDetailPanel` / `NotificationsPanel` flat surface styling.
-- **Phase 7 — Verify:** e2e updated for routed Settings + workspace smoke; unit tests for workspace views.
+- Added capture metadata fields for link, snippet, and image intake without changing app/storage contracts.
+- Replaced browser prompt project creation with an app-native project dialog in the sidebar.
+- Replaced settings `window.confirm` clear flow with an app-native confirmation dialog.
+- Added Settings import/export/reset UI states with main-thread data actions wired through the app shell.
+- Added Inbox intake review metrics for unassigned items, OCR queued/ready, and extension intake readiness.
+- Added OCR ready/queued badges on saved item cards and OCR copy/queued actions in item detail.
+- Added colocated tests for capture metadata, settings clear dialog, and sidebar project dialog.
+- Added local beta E2E coverage for project rename/delete, item detail edit lifecycle, invalid archive import, extension bridge rejection/confirmation, rejected image uploads, and modal keyboard behavior.
+- Marked hidden Inbox floating previews decorative so users do not tab into or click controls hidden behind the capture panel.
 
 ## Blocked
-- None.
+- No known frontend blocker for the local beta readiness pass.
 
-## Next (loop)
-- Compare UI to Conduit/Aster/Meridian references and `screenie-capture.png` / `screenie-find.png`; one focused polish slice per tick.
+## Next
+- Continue visual polish against `screenie-capture.png` and `screenie-find.png` if stricter design parity becomes a release requirement.
 
 ## Files touched
 - `docs/agents/frontend.md`
-- `src/domain/savedItem.ts`
+- `src/components/SavedItemCard.tsx`
+- `src/components/Sidebar.test.tsx`
+- `src/components/Sidebar.tsx`
+- `src/features/inbox/CapturePanel.test.tsx`
+- `src/features/inbox/CapturePanel.tsx`
+- `src/features/inbox/InboxView.tsx`
+- `src/features/item/ItemDetailPanel.tsx`
+- `src/features/inbox/ExtensionCaptureDialog.tsx`
+- `src/features/settings/SettingsView.test.tsx`
+- `src/features/settings/SettingsView.tsx`
 - `src/styles/global.css`
-- `src/App.tsx`
-- `src/components/Sidebar.tsx`, `TopBar.tsx`, `SavedItemCard.tsx`, `FilterMenu.tsx`
-- `src/components/SurfaceCard.tsx`, `StatusBadge.tsx`, `SectionLabel.tsx`, `SetupCard.tsx`, `SettingsSection.tsx`
-- `src/features/integrations/`, `templates/`, `settings/` (views + data)
-- `src/features/inbox/`, `library/`, `tags/`, `item/`, `notifications/`
-- `e2e/screenie-functional.spec.ts`
-- `src/test/features/WorkspaceViews.test.tsx`
 
 ## Needs from others
-- None.
+- None at this checkpoint.
