@@ -1,39 +1,30 @@
 # Frontend Engineer Status
 
 ## Now
-- Product Beta UI audit pass complete for owned frontend files.
-- Local beta readiness modal keyboard/focus checks are wired for Settings, extension review, item detail, project dialogs, and permanent delete confirmation.
+- Reviewed local `codex/premium-ui-polish` against pushed `origin/codex/capture-paste-drop`.
+- Applied the frontend capture UI bridge so pasted, dropped, or chosen images stage for review before save while preserving local preview-card polish.
 
 ## Done
-- Added capture metadata fields for link, snippet, and image intake without changing app/storage contracts.
-- Replaced browser prompt project creation with an app-native project dialog in the sidebar.
-- Replaced settings `window.confirm` clear flow with an app-native confirmation dialog.
-- Added Settings import/export/reset UI states with main-thread data actions wired through the app shell.
-- Added Inbox intake review metrics for unassigned items, OCR queued/ready, and extension intake readiness.
-- Added OCR ready/queued badges on saved item cards and OCR copy/queued actions in item detail.
-- Added colocated tests for capture metadata, settings clear dialog, and sidebar project dialog.
-- Added local beta E2E coverage for project rename/delete, item detail edit lifecycle, invalid archive import, extension bridge rejection/confirmation, rejected image uploads, and modal keyboard behavior.
-- Marked hidden Inbox floating previews decorative so users do not tab into or click controls hidden behind the capture panel.
+- Confirmed `origin/codex/capture-paste-drop` forked from `origin/codex/premium-ui-polish`; local `codex/premium-ui-polish` has one preview-image commit on top.
+- Brought the capture branch's reviewed image paste/drop/file-selection flow into `src/features/inbox/CapturePanel.tsx`.
+- Added pending-image review styling in `src/styles/global.css` without removing local saved-card, floating-preview, or detail-preview image styles.
+- Added focused component coverage for image upload staging before save.
+- Verified with `npm test -- src/features/inbox/CapturePanel.test.tsx`, `npm run lint`, and `npm run build`.
 
 ## Blocked
-- No known frontend blocker for the local beta readiness pass.
+- No known frontend blocker.
+- The worktree still has dirty cross-owner files outside this frontend patch; I did not edit or normalize them.
 
 ## Next
-- Continue visual polish against `screenie-capture.png` and `screenie-find.png` if stricter design parity becomes a release requirement.
+- Real-user readiness still needs a manual visual pass across desktop/mobile for capture, floating previews, saved cards, and detail modal after main integration.
+- Main should merge the local preview-image polish and pushed capture branch together; the only frontend overlap I foresee is additive CSS in `src/styles/global.css`, not a conceptual UI conflict.
+- Quality can add E2E coverage for the global paste/drop reviewed image flow if this becomes a release gate.
 
 ## Files touched
 - `docs/agents/frontend.md`
-- `src/components/SavedItemCard.tsx`
-- `src/components/Sidebar.test.tsx`
-- `src/components/Sidebar.tsx`
 - `src/features/inbox/CapturePanel.test.tsx`
 - `src/features/inbox/CapturePanel.tsx`
-- `src/features/inbox/InboxView.tsx`
-- `src/features/item/ItemDetailPanel.tsx`
-- `src/features/inbox/ExtensionCaptureDialog.tsx`
-- `src/features/settings/SettingsView.test.tsx`
-- `src/features/settings/SettingsView.tsx`
 - `src/styles/global.css`
 
 ## Needs from others
-- None at this checkpoint.
+- Main thread should coordinate merge ordering because this checkout still contains unrelated dirty files in e2e, data, and test areas.
