@@ -1,4 +1,8 @@
 import {
+  useEffect,
+  useState
+} from 'react';
+import {
   ChevronRight,
   FileImage,
   Image,
@@ -10,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { SavedItem } from '../domain/savedItem';
 import { formatBytes, formatItemDate } from '../lib/format';
+import { getSavedItemPreviewImage } from '../lib/previewImages';
 import { SurfaceCard } from './SurfaceCard';
 
 interface SavedItemCardProps {
@@ -39,6 +44,13 @@ export function SavedItemCard({
   const ocrStatus = getOcrStatus(item);
   const previewText = matchedText ?? item.text ?? item.description ?? 'No preview available.';
   const matchLabel = matchedText ? 'Matched text' : matchSummary ? 'Why it matched' : 'Saved text';
+  const previewImage = getSavedItemPreviewImage(item);
+  const [failedPreviewImage, setFailedPreviewImage] = useState<string | null>(null);
+  const shouldShowPreviewImage = Boolean(previewImage && failedPreviewImage !== previewImage);
+
+  useEffect(() => {
+    setFailedPreviewImage(null);
+  }, [previewImage]);
 
   return (
     <SurfaceCard
@@ -47,8 +59,15 @@ export function SavedItemCard({
       onClick={onOpenDetail ? () => onOpenDetail(item) : undefined}
     >
       <div className={`item-thumb item-thumb-${item.thumbnailColor ?? item.type}`}>
-        {item.imageDataUrl ? (
-          <img src={item.imageDataUrl} alt="" />
+        {shouldShowPreviewImage ? (
+          <img
+            src={previewImage}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => setFailedPreviewImage(previewImage ?? null)}
+          />
         ) : (
           <ItemTypeIcon type={item.type} size={28} strokeWidth={1.5} />
         )}
