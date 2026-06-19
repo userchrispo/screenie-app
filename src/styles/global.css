@@ -3069,6 +3069,102 @@ img {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.find-recall-card {
+  display: grid;
+  gap: var(--spacing-16);
+  border-color: rgba(49, 95, 220, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.84)),
+    var(--surface);
+}
+
+.find-recall-card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-16);
+  align-items: start;
+}
+
+.find-recall-card__copy {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.find-recall-card__eyebrow,
+.find-recall-card__related > span,
+.find-recall-suggestions > span {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+}
+
+.find-recall-card__title,
+.find-recall-card__copy p {
+  margin: 0;
+}
+
+.find-recall-card__title {
+  color: var(--ink);
+  font-size: var(--text-title);
+}
+
+.find-recall-card__copy p:not(.find-recall-card__title) {
+  max-width: 70ch;
+  color: var(--muted);
+}
+
+.find-recall-card__signals span {
+  border-color: rgba(49, 95, 220, 0.18);
+  background: rgba(234, 241, 255, 0.72);
+  color: var(--ink);
+}
+
+.find-recall-card__related,
+.find-recall-suggestions {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.find-recall-card__related > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-8);
+}
+
+.find-recall-card__related button,
+.find-recall-suggestions button {
+  min-height: 32px;
+  padding: 0 var(--spacing-10);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+}
+
+.find-recall-card__related button:hover,
+.find-recall-card__related button:focus-visible,
+.find-recall-suggestions button:hover,
+.find-recall-suggestions button:focus-visible {
+  border-color: var(--border-strong);
+  background: #ffffff;
+}
+
+.find-recall-suggestions {
+  margin-top: var(--spacing-8);
+  justify-items: center;
+}
+
+@media (max-width: 720px) {
+  .find-recall-card__body {
+    grid-template-columns: 1fr;
+  }
+
+  .find-recall-card__body .ghost-button {
+    width: 100%;
+  }
+}
 .find-dashboard__rail {
   display: grid;
   gap: var(--spacing-16);

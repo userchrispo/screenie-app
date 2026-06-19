@@ -112,7 +112,8 @@ describe('recallSavedItems', () => {
       item: { id: 'shot-pricing' },
       answer: expect.stringContaining('transparent pricing'),
       signals: expect.arrayContaining([
-        expect.objectContaining({ kind: 'ocr', label: 'OCR text' })
+        expect.objectContaining({ kind: 'ocr', label: 'OCR text' }),
+        expect.objectContaining({ kind: 'project', label: 'Pricing Research' })
       ])
     });
   });

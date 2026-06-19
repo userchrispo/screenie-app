@@ -1,8 +1,16 @@
 import { useState } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { SavedItem, ScreenieSort } from '../../domain/savedItem';
+import type { Project, SavedItem, ScreenieSort } from '../../domain/savedItem';
 import { FindView } from '../../features/find/FindView';
+
+const projects: Project[] = [
+  {
+    id: 'project-pricing',
+    name: 'Pricing Research',
+    createdAt: '2026-01-01T00:00:00.000Z'
+  }
+];
 
 const pricingFixtures: SavedItem[] = [
   {
@@ -11,6 +19,9 @@ const pricingFixtures: SavedItem[] = [
     title: 'Pricing screenshot',
     extractedText: 'Starter $19 Pro $49 Team $99',
     tags: ['pricing', 'pro plan'],
+    projectId: 'project-pricing',
+    source: 'paste',
+    ocrStatus: 'ready',
     isFavorite: true,
     status: 'active',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -23,6 +34,8 @@ const pricingFixtures: SavedItem[] = [
     url: 'https://screenie.app/pricing',
     text: 'Saved link from screenie.app',
     tags: ['pricing', 'pro plan'],
+    projectId: 'project-pricing',
+    source: 'manual',
     isFavorite: false,
     status: 'active',
     createdAt: '2026-01-02T00:00:00.000Z',
@@ -54,7 +67,8 @@ function FindViewHarness({
   return (
     <FindView
       items={items}
-      filter="inbox"
+      projects={projects}
+      filter="library"
       searchText={searchText}
       sortBy={sortBy}
       onSearchTextChange={setSearchText}
@@ -83,8 +97,8 @@ describe('FindView', () => {
     render(<FindViewHarness items={pricingFixtures} initialSearch="pricing pro plan" />);
 
     expect(screen.getByText(/\d+ results found/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pricing screenshot' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Our Pricing Plans - Screenie' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Pricing screenshot' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { name: 'Our Pricing Plans - Screenie' }).length).toBeGreaterThan(0);
   });
 
   it('finds screenshots by OCR-only text and marks the result as OCR-backed', () => {
@@ -103,11 +117,33 @@ describe('FindView', () => {
     render(<FindViewHarness items={[...pricingFixtures, ocrOnlyFixture]} initialSearch="zebra 118" />);
 
     expect(screen.getByText('1 results found')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Receipt capture' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Receipt capture' }).length).toBeGreaterThan(0);
     expect(screen.getByText('OCR ready')).toBeInTheDocument();
     expect(screen.getByText('Matched text')).toBeInTheDocument();
-    expect(screen.getByText(/Invoice zebra total 118/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Invoice zebra total 118/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'Our Pricing Plans - Screenie' })).not.toBeInTheDocument();
+  });
+
+  it('shows a best memory match with local recall evidence', () => {
+    render(<FindViewHarness items={pricingFixtures} initialSearch="starter team" />);
+
+    const recallRegion = screen.getByRole('region', { name: 'Best memory match' });
+
+    expect(within(recallRegion).getByText('Pricing screenshot')).toBeInTheDocument();
+    expect(within(recallRegion).getByText('OCR text')).toBeInTheDocument();
+    expect(within(recallRegion).getByText('Pricing Research')).toBeInTheDocument();
+    expect(within(recallRegion).getByText(/OCR matched/)).toBeInTheDocument();
+  });
+
+  it('offers recall suggestions when no results match', async () => {
+    const user = userEvent.setup();
+    render(<FindViewHarness items={pricingFixtures} initialSearch="no matching memory" />);
+
+    expect(screen.getByRole('region', { name: 'Recall search suggestions' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '#pricing' }));
+
+    expect(screen.getByText(/results found/)).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Pricing screenshot' }).length).toBeGreaterThan(0);
   });
 
   it('updates sort order from the header control', async () => {

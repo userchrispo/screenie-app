@@ -1,13 +1,15 @@
 import type { ReactNode, RefObject } from 'react';
 import { CircleHelp, ScanText, Search, SlidersHorizontal, Star, Tags } from 'lucide-react';
-import type { SavedItem, SavedItemType, ScreenieFilter, ScreenieSort } from '../../domain/savedItem';
+import type { Project, SavedItem, SavedItemType, ScreenieFilter, ScreenieSort } from '../../domain/savedItem';
 import { SavedItemCard } from '../../components/SavedItemCard';
 import { PageHeader } from '../../components/PageHeader';
 import { SurfaceCard } from '../../components/SurfaceCard';
 import { searchSavedItems } from '../../lib/search/searchSavedItems';
+import { recallSavedItems, type RecallResult, type RecallSignal } from '../../lib/recall/recallSavedItems';
 
 interface FindViewProps {
   items: SavedItem[];
+  projects: Project[];
   filter: ScreenieFilter;
   searchText: string;
   sortBy: ScreenieSort;
@@ -27,12 +29,14 @@ interface FindViewProps {
 
 export function FindView({
   items,
+  projects,
   filter,
   searchText,
   sortBy,
   typeFilter,
   tagFilter,
   projectId,
+  onSearchTextChange,
   onSortChange,
   onToggleFavorite,
   onMoveToTrash,
@@ -41,14 +45,37 @@ export function FindView({
   onTagClick,
   onDeletePermanently
 }: FindViewProps) {
-  const results = searchSavedItems(items, {
+  const scopedFilter = projectId ? 'library' : filter;
+  const scopedItems = searchSavedItems(items, {
+    text: '',
+    filter: scopedFilter,
+    sortBy: 'newest',
+    types: typeFilter.length > 0 ? typeFilter : undefined,
+    tags: tagFilter.length > 0 ? tagFilter : undefined,
+    projectId
+  }).map((result) => result.item);
+  const results = searchSavedItems(scopedItems, {
     text: searchText,
-    filter: projectId ? 'library' : filter,
+    filter: 'library',
     sortBy,
     types: typeFilter.length > 0 ? typeFilter : undefined,
     tags: tagFilter.length > 0 ? tagFilter : undefined,
     projectId
   });
+  const recallResults = recallSavedItems({
+    items: scopedItems,
+    projects,
+    text: searchText,
+    projectId,
+    limit: 3
+  });
+  const bestRecall = searchText.trim() ? recallResults[0] : undefined;
+  const relatedRecallItems = bestRecall
+    ? bestRecall.relatedItemIds
+        .map((id) => scopedItems.find((item) => item.id === id))
+        .filter((item): item is SavedItem => Boolean(item))
+    : [];
+  const recallSuggestions = getRecallSuggestions(scopedItems, projects);
   const resultItems = results.map((result) => result.item);
   const favoriteCount = resultItems.filter((item) => item.isFavorite).length;
   const ocrMatchCount = results.filter(
@@ -93,6 +120,10 @@ export function FindView({
             </div>
           </section>
 
+          {bestRecall ? (
+            <RecallMemoryPanel result={bestRecall} relatedItems={relatedRecallItems} onOpenDetail={onOpenDetail} />
+          ) : null}
+
           {results.length > 0 ? (
             <section className="content-section find-dashboard__result-section" aria-labelledby="find-results-title">
               <div className="section-header">
@@ -124,6 +155,18 @@ export function FindView({
               <SlidersHorizontal size={18} strokeWidth={1.5} aria-hidden="true" />
               <h2>No saved item matched that search.</h2>
               <p>Try a tag, filename, URL, or remembered OCR text.</p>
+              {recallSuggestions.length > 0 ? (
+                <section className="find-recall-suggestions" aria-label="Recall search suggestions">
+                  <span>Try searches like</span>
+                  <div className="filter-chip-row">
+                    {recallSuggestions.map((suggestion) => (
+                      <button key={suggestion.label} type="button" onClick={() => onSearchTextChange(suggestion.query)}>
+                        {suggestion.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
           )}
 
@@ -185,6 +228,68 @@ export function FindView({
   );
 }
 
+function RecallMemoryPanel({
+  result,
+  relatedItems,
+  onOpenDetail
+}: {
+  result: RecallResult;
+  relatedItems: SavedItem[];
+  onOpenDetail: (item: SavedItem) => void;
+}) {
+  return (
+    <SurfaceCard
+      as="section"
+      className="content-section find-recall-card"
+      aria-labelledby="best-memory-match-title"
+    >
+      <div className="section-header">
+        <div>
+          <h2 id="best-memory-match-title">Best memory match</h2>
+          <p className="text-muted">Screenie found the strongest local clue and why it matched.</p>
+        </div>
+      </div>
+
+      <div className="find-recall-card__body">
+        <div className="find-recall-card__copy">
+          <span className="find-recall-card__eyebrow">Quiet recall</span>
+          <p className="find-recall-card__title">{result.item.title}</p>
+          <p>{result.answer}</p>
+          <EvidenceChips signals={result.signals} />
+        </div>
+        <button type="button" className="ghost-button ghost-button--primary" onClick={() => onOpenDetail(result.item)}>
+          Open match
+        </button>
+      </div>
+
+      {relatedItems.length > 0 ? (
+        <div className="find-recall-card__related" aria-label="Related captures">
+          <span>Related captures</span>
+          <div>
+            {relatedItems.map((item) => (
+              <button key={item.id} type="button" onClick={() => onOpenDetail(item)}>
+                {item.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </SurfaceCard>
+  );
+}
+
+function EvidenceChips({ signals }: { signals: RecallSignal[] }) {
+  const visibleSignals = signals.slice(0, 6);
+
+  return (
+    <div className="filter-chip-row find-recall-card__signals" aria-label="Recall evidence">
+      {visibleSignals.map((signal) => (
+        <span key={`${signal.kind}-${signal.label}`}>{signal.label}</span>
+      ))}
+    </div>
+  );
+}
+
 function FindMetric({
   icon,
   label,
@@ -239,6 +344,26 @@ function getSearchSummary(searchText: string, activeFilters: string[]): string {
   }
 
   return 'Search across screenshots, links, snippets, tags, and OCR.';
+}
+
+function getRecallSuggestions(items: SavedItem[], projects: Project[]): Array<{ label: string; query: string }> {
+  const suggestions: Array<{ label: string; query: string }> = [];
+  const topTags = getTopTags(items, 3);
+  const projectIds = new Set(items.map((item) => item.projectId).filter(Boolean));
+  const topProject = projects.find((project) => projectIds.has(project.id));
+  const hasOcrReadyItem = items.some((item) => item.extractedText || item.ocrStatus === 'ready');
+
+  suggestions.push(...topTags.map(({ tag }) => ({ label: `#${tag}`, query: tag })));
+
+  if (topProject) {
+    suggestions.push({ label: topProject.name, query: topProject.name });
+  }
+
+  if (hasOcrReadyItem) {
+    suggestions.push({ label: 'OCR-ready screenshots', query: 'screenshot OCR' });
+  }
+
+  return suggestions.slice(0, 5);
 }
 
 function getTopTags(items: SavedItem[], limit: number): Array<{ tag: string; count: number }> {

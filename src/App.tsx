@@ -408,6 +408,7 @@ export function App() {
               ) : activeView === 'find' ? (
                 <FindView
                   items={items}
+                  projects={projects}
                   filter="library"
                   searchText={searchText}
                   sortBy={sortBy}

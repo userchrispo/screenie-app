@@ -16,6 +16,26 @@ test('toggles favorite from a saved card', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Our Pricing Plans - Screenie' })).toBeVisible();
 });
 
+test('surfaces local recall evidence and suggestions in Find', async ({ page }) => {
+  await page.getByRole('button', { name: 'Find' }).click();
+  const search = page.getByLabel('Search everything in Screenie');
+  await search.fill('starter team');
+
+  const recall = page.getByRole('region', { name: 'Best memory match' });
+  await expect(recall).toBeVisible();
+  await expect(recall).toContainText('Pricing screenshot from last week');
+  await expect(recall).toContainText('OCR matched');
+  await expect(recall).toContainText('OCR text');
+  await expect(recall).toContainText('Pricing Research');
+  await expect(recall.getByRole('button', { name: 'Open match' })).toBeVisible();
+  await expect(recall.getByText('Related captures')).toBeVisible();
+
+  await search.fill('qxzv jmpl rbtk');
+  const suggestions = page.getByRole('region', { name: 'Recall search suggestions' });
+  await expect(suggestions).toBeVisible();
+  await suggestions.getByRole('button', { name: '#pricing' }).click();
+  await expect(page.getByText(/results found/)).toBeVisible();
+});
 test('opens settings as a routed page from the top bar', async ({ page }) => {
   await page.getByLabel('Settings', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();

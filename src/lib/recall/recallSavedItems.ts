@@ -139,6 +139,10 @@ function scoreRecallItem(
     addSignal(signals, { kind: 'date', label: dateMemory.label });
   }
 
+  if (projectName && score > 0) {
+    addSignal(signals, { kind: 'project', label: projectName });
+  }
+
   if (item.isFavorite && score > 0) {
     score += 2;
     addSignal(signals, { kind: 'favorite', label: 'Favorite' });
