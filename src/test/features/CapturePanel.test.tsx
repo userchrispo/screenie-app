@@ -2,14 +2,6 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CapturePanel } from '../../features/inbox/CapturePanel';
 
-async function expandLinkTile(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Paste link/i }));
-}
-
-async function expandSnippetTile(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Save snippet/i }));
-}
-
 function changeField(label: string, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
@@ -41,34 +33,31 @@ function filePasteData(file: File) {
 }
 
 describe('CapturePanel', () => {
-  it('renders capture labels and action buttons', async () => {
+  it('renders capture modes and switches between fields', async () => {
     const user = userEvent.setup();
     render(<CapturePanel onCreate={vi.fn().mockResolvedValue(undefined)} />);
 
-    expect(screen.getByRole('button', { name: /Paste link/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Save snippet/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Text' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Screenshot' })).toBeInTheDocument();
 
-    await expandLinkTile(user);
-    expect(screen.getByLabelText('Paste link')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Link URL')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save link' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: 'Escape' });
-    await expandSnippetTile(user);
-    expect(screen.getByLabelText('Save snippet')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save text' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Text' }));
+    expect(screen.getByLabelText('Note')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save note' })).toBeInTheDocument();
   });
 
-  it('shows validation messages when saving empty link or snippet', async () => {
+  it('shows validation messages when saving empty link or note', async () => {
     const user = userEvent.setup();
     render(<CapturePanel onCreate={vi.fn().mockResolvedValue(undefined)} />);
 
-    await expandLinkTile(user);
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
     expect(screen.getByRole('status')).toHaveTextContent('Paste a URL first.');
 
-    fireEvent.keyDown(window, { key: 'Escape' });
-    await expandSnippetTile(user);
-    await user.click(screen.getByRole('button', { name: 'Save text' }));
+    await user.click(screen.getByRole('button', { name: 'Text' }));
+    await user.click(screen.getByRole('button', { name: 'Save note' }));
     expect(screen.getByRole('status')).toHaveTextContent('Write a snippet first.');
   });
 
@@ -77,9 +66,8 @@ describe('CapturePanel', () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
 
-    await expandLinkTile(user);
-    changeField('Paste link', 'screenie.app/pricing');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    changeField('Link URL', 'screenie.app/pricing');
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
 
     expect(onCreate).toHaveBeenCalledOnce();
     expect(screen.getByRole('status')).toHaveTextContent('Link saved.');
@@ -90,16 +78,12 @@ describe('CapturePanel', () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
 
     render(
-      <CapturePanel
-        onCreate={onCreate}
-        initialMode="link"
-        initialLink="https://docs.screenie.app/capture"
-      />
+      <CapturePanel onCreate={onCreate} initialMode="link" initialLink="https://docs.screenie.app/capture" />
     );
 
-    expect(screen.getByLabelText('Paste link')).toHaveValue('https://docs.screenie.app/capture');
+    expect(screen.getByLabelText('Link URL')).toHaveValue('https://docs.screenie.app/capture');
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
 
     expect(onCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -117,28 +101,27 @@ describe('CapturePanel', () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
 
-    await expandLinkTile(user);
-    changeField('Paste link', 'not a real url');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    changeField('Link URL', 'not a real url');
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
 
     expect(onCreate).not.toHaveBeenCalled();
     expect(screen.getByRole('status')).toHaveTextContent('Enter a valid URL.');
   });
 
-  it('saves a snippet and shows confirmation', async () => {
+  it('saves a note and shows confirmation', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
 
-    await expandSnippetTile(user);
-    changeField('Save snippet', 'Pro plan includes advanced analytics and priority support.');
-    await user.click(screen.getByRole('button', { name: 'Save text' }));
+    await user.click(screen.getByRole('button', { name: 'Text' }));
+    changeField('Note', 'Pro plan includes advanced analytics and priority support.');
+    await user.click(screen.getByRole('button', { name: 'Save note' }));
 
     expect(onCreate).toHaveBeenCalledOnce();
     expect(screen.getByRole('status')).toHaveTextContent('Snippet saved.');
   });
 
-  it('saves a prefilled snippet from an external intake stub', async () => {
+  it('saves a prefilled note from an external intake stub', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn().mockResolvedValue(undefined);
 
@@ -150,11 +133,11 @@ describe('CapturePanel', () => {
       />
     );
 
-    expect(screen.getByLabelText('Save snippet')).toHaveValue(
+    expect(screen.getByLabelText('Note')).toHaveValue(
       'Research note clipped from the browser extension bridge.'
     );
 
-    await user.click(screen.getByRole('button', { name: 'Save text' }));
+    await user.click(screen.getByRole('button', { name: 'Save note' }));
 
     expect(onCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -202,10 +185,10 @@ describe('CapturePanel', () => {
 
     fireEvent.paste(document, { clipboardData: textPasteData('https://screenie.app/pricing') });
 
-    expect(await screen.findByLabelText('Paste link')).toHaveValue('https://screenie.app/pricing');
+    expect(await screen.findByLabelText('Link URL')).toHaveValue('https://screenie.app/pricing');
     expect(screen.getByRole('status')).toHaveTextContent('Clipboard URL ready to review.');
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
 
     await waitFor(() => expect(onCreate).toHaveBeenCalledOnce());
     expect(onCreate).toHaveBeenCalledWith(
@@ -217,7 +200,7 @@ describe('CapturePanel', () => {
     );
   });
 
-  it('opens snippet review from pasted plain text', async () => {
+  it('opens note review from pasted plain text', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
@@ -226,12 +209,12 @@ describe('CapturePanel', () => {
       clipboardData: textPasteData('Customer feedback says screenshots should paste directly.')
     });
 
-    expect(await screen.findByLabelText('Save snippet')).toHaveValue(
+    expect(await screen.findByLabelText('Note')).toHaveValue(
       'Customer feedback says screenshots should paste directly.'
     );
     expect(screen.getByRole('status')).toHaveTextContent('Clipboard text ready to review.');
 
-    await user.click(screen.getByRole('button', { name: 'Save text' }));
+    await user.click(screen.getByRole('button', { name: 'Save note' }));
 
     await waitFor(() => expect(onCreate).toHaveBeenCalledOnce());
     expect(onCreate).toHaveBeenCalledWith(
@@ -247,12 +230,12 @@ describe('CapturePanel', () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
 
-    await expandSnippetTile(user);
-    const snippetInput = screen.getByLabelText('Save snippet');
-    fireEvent.paste(snippetInput, { clipboardData: textPasteData('https://screenie.app/inside-field') });
+    await user.click(screen.getByRole('button', { name: 'Text' }));
+    const noteInput = screen.getByLabelText('Note');
+    fireEvent.paste(noteInput, { clipboardData: textPasteData('https://screenie.app/inside-field') });
 
-    expect(screen.getByLabelText('Save snippet')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Paste link')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Note')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Link URL')).not.toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
   });
 
@@ -261,8 +244,8 @@ describe('CapturePanel', () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
     render(<CapturePanel onCreate={onCreate} />);
 
-    await user.click(screen.getByRole('button', { name: /Drop screenshot/i }));
-    fireEvent.change(screen.getByLabelText('Drop screenshot'), {
+    await user.click(screen.getByRole('button', { name: 'Screenshot' }));
+    fireEvent.change(screen.getByLabelText('Add image'), {
       target: { files: [pngFile('picker-screen.png')] }
     });
 

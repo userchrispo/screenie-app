@@ -9,6 +9,7 @@ import {
   type ScreenieRepository,
   type UpdateSavedItemInput
 } from '../../domain/savedItem';
+import type { CaptureTemplate } from '../../domain/captureTemplate';
 import { createWorkspaceSnapshot, normalizeWorkspaceSnapshot } from '../../domain/workspaceSnapshot';
 import { seedItems, seedProjects } from './seedData';
 
@@ -18,6 +19,7 @@ export function createMemoryScreenieRepository(
 ): ScreenieRepository {
   const items = new Map(initialItems.map((item) => [item.id, item]));
   const projects = new Map(initialProjects.map((project) => [project.id, project]));
+  const templates = new Map<string, CaptureTemplate>();
 
   async function updateItem(id: string, input: UpdateSavedItemInput) {
     const existing = items.get(id);
@@ -41,6 +43,7 @@ export function createMemoryScreenieRepository(
   async function clearWorkspace() {
     items.clear();
     projects.clear();
+    templates.clear();
   }
 
   return {
@@ -101,12 +104,16 @@ export function createMemoryScreenieRepository(
     },
 
     async removeProject(id: string) {
+      const affected: SavedItem[] = [];
       for (const [itemId, item] of items) {
         if (item.projectId === id) {
-          items.set(itemId, updateSavedItem(item, { projectId: null }));
+          const updated = updateSavedItem(item, { projectId: null });
+          items.set(itemId, updated);
+          affected.push(updated);
         }
       }
       projects.delete(id);
+      return affected;
     },
 
     async exportWorkspace(now?: string) {
@@ -132,7 +139,22 @@ export function createMemoryScreenieRepository(
 
     seed: seedWorkspace,
 
-    clear: clearWorkspace
+    clear: clearWorkspace,
+
+    async listTemplates() {
+      return Array.from(templates.values()).sort((a, b) =>
+        (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+      );
+    },
+
+    async saveTemplate(template: CaptureTemplate) {
+      templates.set(template.id, template);
+      return template;
+    },
+
+    async deleteTemplate(id: string) {
+      templates.delete(id);
+    }
   };
 }
 

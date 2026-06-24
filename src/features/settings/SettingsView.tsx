@@ -1,33 +1,122 @@
-import { Download, RotateCcw, Trash2, Upload, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import {
+  Download,
+  FileImage,
+  FolderOpen,
+  HardDrive,
+  Layers,
+  Link as LinkIcon,
+  Monitor,
+  Moon,
+  RotateCcw,
+  ScanText,
+  Sun,
+  Tags as TagsIcon,
+  Trash2,
+  Type,
+  Upload,
+  X
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { SettingsSection } from '../../components/SettingsSection';
 import { SurfaceCard } from '../../components/SurfaceCard';
-import type { WorkspaceSnapshot } from '../../domain/savedItem';
+import { StatCard } from '../../components/StatCard';
+import { Field, Input, Select } from '../../components/Field';
+import { Button } from '../../components/Button';
+import type { Project, SavedItem, WorkspaceSnapshot } from '../../domain/savedItem';
 import { parseWorkspaceSnapshot } from '../../domain/workspaceSnapshot';
+import { formatBytes } from '../../lib/format';
 import { modShortcutKeys } from '../../lib/keyboardShortcuts';
+import { getStoredPreference, setThemePreference, type ThemePreference } from '../../lib/theme';
+import { OCR_LANGUAGE_OPTIONS, type Density } from '../../lib/preferences';
+import { usePreferences } from '../../lib/usePreferences';
+
+const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Monitor }
+];
+
+const DENSITY_OPTIONS: { value: Density; label: string }[] = [
+  { value: 'comfortable', label: 'Comfortable' },
+  { value: 'compact', label: 'Compact' }
+];
 
 interface SettingsViewProps {
+  items?: SavedItem[];
+  projects?: Project[];
   onClearAll: () => Promise<void>;
   onExportWorkspace: () => Promise<WorkspaceSnapshot>;
   onImportWorkspace: (snapshot: WorkspaceSnapshot) => Promise<void>;
   onResetDemo: () => Promise<void>;
+  onRunAllOcr?: () => Promise<void> | void;
 }
 
 type DataDialog = 'clear' | 'export' | 'import' | 'reset' | null;
 
 export function SettingsView({
+  items = [],
+  projects = [],
   onClearAll,
   onExportWorkspace,
   onImportWorkspace,
-  onResetDemo
+  onResetDemo,
+  onRunAllOcr
 }: SettingsViewProps) {
+  const { preferences, update, reset } = usePreferences();
   const [dialog, setDialog] = useState<DataDialog>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [importSnapshot, setImportSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [importError, setImportError] = useState('');
+  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() => getStoredPreference());
+  const [estimatedBytes, setEstimatedBytes] = useState<number | null>(null);
+  const [ocrMessage, setOcrMessage] = useState('');
+  const [ocrBusy, setOcrBusy] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  const insights = useMemo(() => computeInsights(items, projects), [items, projects]);
+
+  useEffect(() => {
+    let active = true;
+    if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+      navigator.storage
+        .estimate()
+        .then((estimate) => {
+          if (active) {
+            setEstimatedBytes(estimate.usage ?? null);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setEstimatedBytes(null);
+          }
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [items]);
+
+  function handleThemeChange(preference: ThemePreference) {
+    setThemePreference(preference);
+    setThemePreferenceState(preference);
+  }
+
+  async function handleRunAllOcr() {
+    if (insights.ocrQueued === 0 || !onRunAllOcr) {
+      return;
+    }
+
+    setOcrBusy(true);
+    setOcrMessage(`Running OCR on ${insights.ocrQueued} queued ${insights.ocrQueued === 1 ? 'item' : 'items'}…`);
+    try {
+      await onRunAllOcr();
+      setOcrMessage('Local OCR finished for queued items.');
+    } finally {
+      setOcrBusy(false);
+    }
+  }
 
   async function handleConfirmClear() {
     setBusy(true);
@@ -99,39 +188,210 @@ export function SettingsView({
     }
   }
 
+  const storageLabel =
+    estimatedBytes && estimatedBytes > insights.storedBytes
+      ? formatBytes(estimatedBytes) ?? '0 KB'
+      : formatBytes(insights.storedBytes) ?? '0 KB';
+
   return (
     <div className="page-stack workspace-page">
       <PageHeader
         titleId="settings-title"
+        eyebrow="Workspace"
         title="Settings"
-        subtitle="Workspace preferences, shortcuts, and data."
+        subtitle="Workspace insights, capture defaults, OCR, appearance, and data."
       />
 
+      <SurfaceCard as="section" className="content-section" aria-labelledby="settings-insights-title">
+        <div className="section-header">
+          <div>
+            <h2 id="settings-insights-title">Workspace insights</h2>
+            <p>A live snapshot of everything stored on this device.</p>
+          </div>
+        </div>
+        <div className="stat-grid" aria-label="Workspace metrics">
+          <StatCard label="Saved items" value={insights.total} icon={<Layers size={16} strokeWidth={1.5} />} />
+          <StatCard label="Links" value={insights.links} tone="blue" icon={<LinkIcon size={16} strokeWidth={1.5} />} />
+          <StatCard label="Notes" value={insights.snippets} tone="violet" icon={<Type size={16} strokeWidth={1.5} />} />
+          <StatCard
+            label="Images"
+            value={insights.images}
+            tone="teal"
+            icon={<FileImage size={16} strokeWidth={1.5} />}
+          />
+          <StatCard
+            label="Projects"
+            value={insights.projects}
+            tone="green"
+            icon={<FolderOpen size={16} strokeWidth={1.5} />}
+          />
+          <StatCard label="Tags" value={insights.tags} icon={<TagsIcon size={16} strokeWidth={1.5} />} />
+          <StatCard label="In trash" value={insights.trash} icon={<Trash2 size={16} strokeWidth={1.5} />} />
+          <StatCard
+            label="Storage used"
+            value={storageLabel}
+            tone="amber"
+            icon={<HardDrive size={16} strokeWidth={1.5} />}
+          />
+        </div>
+      </SurfaceCard>
+
       <SurfaceCard as="section" className="content-section" aria-labelledby="settings-title">
-        <SettingsSection title="Workspace">
-          <div className="settings-status-row">
-            <span className="status-badge status-badge--active">Local-first</span>
-            <p className="text-muted">
-              IndexedDB storage is active on this device.
-            </p>
+        <SettingsSection title="Appearance">
+          <p className="text-muted">Choose how Screenie looks and feels on this device.</p>
+          <div className="settings-field-label">Theme</div>
+          <div className="theme-options" role="group" aria-label="Theme preference">
+            {THEME_OPTIONS.map((option) => {
+              const Icon = option.icon;
+              const active = themePreference === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`theme-option${active ? ' theme-option--active' : ''}`}
+                  aria-pressed={active}
+                  onClick={() => handleThemeChange(option.value)}
+                >
+                  <Icon size={18} strokeWidth={1.5} aria-hidden="true" />
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="settings-field-label">Density</div>
+          <div className="theme-options" role="group" aria-label="Layout density">
+            {DENSITY_OPTIONS.map((option) => {
+              const active = preferences.density === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`theme-option${active ? ' theme-option--active' : ''}`}
+                  aria-pressed={active}
+                  onClick={() => update({ density: option.value })}
+                >
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
           </div>
         </SettingsSection>
 
-        <SettingsSection title="Screenie Pro">
+        <SettingsSection title="Capture defaults">
+          <p className="text-muted">These pre-fill every new capture. You can still edit them per item.</p>
+          <div className="settings-grid">
+            <Field label="Default capture mode" htmlFor="pref-mode">
+              <Select
+                id="pref-mode"
+                value={preferences.defaultCaptureMode}
+                onChange={(event) =>
+                  update({ defaultCaptureMode: event.target.value as typeof preferences.defaultCaptureMode })
+                }
+              >
+                <option value="link">Link</option>
+                <option value="snippet">Text</option>
+                <option value="image">Screenshot</option>
+              </Select>
+            </Field>
+            <Field label="Max image size (MB)" htmlFor="pref-max-image">
+              <Input
+                id="pref-max-image"
+                type="number"
+                min={1}
+                max={50}
+                value={preferences.maxImageMb}
+                onChange={(event) => update({ maxImageMb: Number(event.target.value) })}
+              />
+            </Field>
+            <Field label="Default link tags" htmlFor="pref-link-tags" hint="Comma separated">
+              <Input
+                id="pref-link-tags"
+                value={preferences.linkTags}
+                onChange={(event) => update({ linkTags: event.target.value })}
+              />
+            </Field>
+            <Field label="Default note tags" htmlFor="pref-snippet-tags" hint="Comma separated">
+              <Input
+                id="pref-snippet-tags"
+                value={preferences.snippetTags}
+                onChange={(event) => update({ snippetTags: event.target.value })}
+              />
+            </Field>
+            <Field label="Default image tags" htmlFor="pref-image-tags" hint="Comma separated">
+              <Input
+                id="pref-image-tags"
+                value={preferences.imageTags}
+                onChange={(event) => update({ imageTags: event.target.value })}
+              />
+            </Field>
+          </div>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={preferences.autoClipboardCapture}
+              onChange={(event) => update({ autoClipboardCapture: event.target.checked })}
+            />
+            <span>
+              <strong>Clipboard auto-capture</strong>
+              <small>Paste anywhere in the app to stage a link, note, or image.</small>
+            </span>
+          </label>
+          <div className="settings-inline-actions">
+            <Button variant="ghost" size="sm" onClick={reset}>
+              Reset to defaults
+            </Button>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection title="OCR">
           <p className="text-muted">
-            Product Beta includes local capture, OCR, search, tags, projects, and extension-ready intake.
-            Cloud sync remains planned.
+            Text recognition runs locally in your browser. Changing the language may download language data on the next
+            run.
           </p>
+          <div className="settings-grid">
+            <Field label="Default OCR language" htmlFor="pref-ocr-language">
+              <Select
+                id="pref-ocr-language"
+                value={preferences.ocrLanguage}
+                onChange={(event) => update({ ocrLanguage: event.target.value })}
+              >
+                {OCR_LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="settings-status-row">
+            <span className={`status-badge ${insights.ocrQueued > 0 ? 'status-badge--progress' : 'status-badge--active'}`}>
+              {insights.ocrQueued > 0 ? `${insights.ocrQueued} queued` : 'All caught up'}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<ScanText size={16} strokeWidth={1.5} aria-hidden="true" />}
+              disabled={insights.ocrQueued === 0 || ocrBusy || !onRunAllOcr}
+              onClick={() => void handleRunAllOcr()}
+            >
+              {ocrBusy ? 'Running…' : `Run OCR on all queued (${insights.ocrQueued})`}
+            </Button>
+          </div>
+          {ocrMessage ? (
+            <p className="capture-message" role="status">
+              {ocrMessage}
+            </p>
+          ) : null}
         </SettingsSection>
 
         <SettingsSection title="Keyboard shortcuts">
           <ul className="shortcut-list">
             <li>
-              <span>Search</span>
+              <span>Command palette</span>
               <kbd>{modShortcutKeys('K').join(' + ')}</kbd>
             </li>
             <li>
-              <span>Quick save</span>
+              <span>Quick capture</span>
               <kbd>{modShortcutKeys('Shift', 'S').join(' + ')}</kbd>
             </li>
             <li>
@@ -186,20 +446,6 @@ export function SettingsView({
           <div className="settings-action-grid">
             <button
               type="button"
-              className="settings-action-card settings-action-card--danger"
-              aria-label="Clear all data"
-              onClick={() => setDialog('clear')}
-            >
-              <span className="settings-action-card__icon" aria-hidden="true">
-                <Trash2 size={18} strokeWidth={1.5} />
-              </span>
-              <span>
-                <strong>Clear all data</strong>
-                <small>Remove saves and projects from this device.</small>
-              </span>
-            </button>
-            <button
-              type="button"
               className="settings-action-card"
               aria-label="Reset workspace"
               onClick={() => setDialog('reset')}
@@ -210,6 +456,25 @@ export function SettingsView({
               <span>
                 <strong>Reset workspace</strong>
                 <small>Restore a clean starter workspace.</small>
+              </span>
+            </button>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection title="Danger zone">
+          <div className="settings-action-grid">
+            <button
+              type="button"
+              className="settings-action-card settings-action-card--danger"
+              aria-label="Clear all data"
+              onClick={() => setDialog('clear')}
+            >
+              <span className="settings-action-card__icon" aria-hidden="true">
+                <Trash2 size={18} strokeWidth={1.5} />
+              </span>
+              <span>
+                <strong>Clear all data</strong>
+                <small>Remove saves and projects from this device.</small>
               </span>
             </button>
           </div>
@@ -237,6 +502,39 @@ export function SettingsView({
       ) : null}
     </div>
   );
+}
+
+interface WorkspaceInsights {
+  total: number;
+  links: number;
+  snippets: number;
+  images: number;
+  projects: number;
+  tags: number;
+  trash: number;
+  storedBytes: number;
+  ocrQueued: number;
+}
+
+function computeInsights(items: SavedItem[], projects: Project[]): WorkspaceInsights {
+  const active = items.filter((item) => item.status === 'active');
+
+  return {
+    total: active.length,
+    links: active.filter((item) => item.type === 'link').length,
+    snippets: active.filter((item) => item.type === 'snippet').length,
+    images: active.filter((item) => item.type === 'image' || item.type === 'screenshot').length,
+    projects: projects.length,
+    tags: new Set(active.flatMap((item) => item.tags)).size,
+    trash: items.filter((item) => item.status === 'trash').length,
+    storedBytes: items.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0),
+    ocrQueued: items.filter(
+      (item) =>
+        (item.type === 'screenshot' || item.type === 'image') &&
+        !item.extractedText &&
+        Boolean(item.imageDataUrl || item.mimeType)
+    ).length
+  };
 }
 
 function DataFlowDialog({

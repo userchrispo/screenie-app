@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
-import { Bell, Search, Settings, SlidersHorizontal } from 'lucide-react';
+import { Bell, PanelLeftOpen, Search, Settings, SlidersHorizontal } from 'lucide-react';
 import { CommandKey } from './CommandKey';
+import { ThemeToggle } from './ThemeToggle';
 import type { ScreenieView } from '../domain/savedItem';
 import { modShortcutKeys } from '../lib/keyboardShortcuts';
 
@@ -20,47 +21,64 @@ interface TopBarProps {
   activeView: ScreenieView;
   searchText: string;
   searchInputRef?: RefObject<HTMLInputElement | null>;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
   onSearchTextChange: (value: string) => void;
   onFocusSearch: () => void;
   onNavigateHome: () => void;
   onOpenNotifications: () => void;
   onNavigateSettings: () => void;
   onOpenFilter: () => void;
+  onOpenCommandPalette: () => void;
 }
 
 export function TopBar({
   activeView,
   searchText,
   searchInputRef,
+  sidebarCollapsed = false,
+  onToggleSidebar,
   onSearchTextChange,
   onFocusSearch,
   onNavigateHome,
   onOpenNotifications,
   onNavigateSettings,
-  onOpenFilter
+  onOpenFilter,
+  onOpenCommandPalette
 }: TopBarProps) {
   const isFind = activeView === 'find';
   const searchLabel = isFind ? 'Search everything in Screenie' : 'Search saved items';
-  const searchPlaceholder = isFind
-    ? 'that pricing screenshot from last week'
-    : 'Search saved items...';
+  const searchPlaceholder = isFind ? 'that pricing screenshot from last week' : 'Search saved items...';
 
   return (
     <header className="topbar">
-      <nav className="breadcrumbs" aria-label="Breadcrumb">
-        <button className="breadcrumbs__root" type="button" onClick={onNavigateHome}>
-          Screenie
-        </button>
-        <span className="breadcrumbs__sep" aria-hidden="true">
-          /
-        </span>
-        <span className="breadcrumbs__current" aria-current="page">
-          {viewLabels[activeView]}
-        </span>
-      </nav>
+      <div className="topbar__lead">
+        {sidebarCollapsed && onToggleSidebar ? (
+          <button
+            type="button"
+            className="icon-button sidebar-expand-toggle"
+            aria-label="Expand sidebar"
+            aria-expanded={false}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
+          </button>
+        ) : null}
+        <nav className="breadcrumbs" aria-label="Breadcrumb">
+          <button className="breadcrumbs__root" type="button" onClick={onNavigateHome}>
+            Screenie
+          </button>
+          <span className="breadcrumbs__sep" aria-hidden="true">
+            /
+          </span>
+          <span className="breadcrumbs__current" aria-current="page">
+            {viewLabels[activeView]}
+          </span>
+        </nav>
+      </div>
 
       <div className="topbar__actions">
-        <label className="top-search surface-card">
+        <label className="top-search">
           <span className="icon-slot">
             <Search size={18} strokeWidth={1.5} aria-hidden="true" />
           </span>
@@ -73,9 +91,20 @@ export function TopBar({
             placeholder={searchPlaceholder}
             aria-label={searchLabel}
           />
-          <CommandKey keys={modShortcutKeys('K')} label="Focus search" />
+          <button
+            type="button"
+            className="top-search__command"
+            aria-label="Open command palette"
+            onClick={(event) => {
+              event.preventDefault();
+              onOpenCommandPalette();
+            }}
+          >
+            <CommandKey keys={modShortcutKeys('K')} label="Open command palette" />
+          </button>
         </label>
 
+        <ThemeToggle />
         <button className="icon-button" type="button" aria-label="Notifications" onClick={onOpenNotifications}>
           <Bell size={18} strokeWidth={1.5} aria-hidden="true" />
         </button>

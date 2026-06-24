@@ -7,6 +7,7 @@ import {
   FileImage,
   Image,
   Link,
+  Quote,
   RotateCcw,
   Star,
   Trash2,
@@ -14,7 +15,8 @@ import {
 } from 'lucide-react';
 import type { SavedItem } from '../domain/savedItem';
 import { formatBytes, formatItemDate } from '../lib/format';
-import { getSavedItemPreviewImage } from '../lib/previewImages';
+import { getLinkLabel, getSavedItemPreviewImage } from '../lib/previewImages';
+import { tagColorClass } from '../lib/tagColor';
 import { SurfaceCard } from './SurfaceCard';
 
 interface SavedItemCardProps {
@@ -68,6 +70,13 @@ export function SavedItemCard({
             referrerPolicy="no-referrer"
             onError={() => setFailedPreviewImage(previewImage ?? null)}
           />
+        ) : item.type === 'snippet' && (item.text ?? item.description) ? (
+          <div className="note-preview">
+            <Quote className="note-preview__mark" size={14} strokeWidth={2} aria-hidden="true" />
+            <p className="note-preview__text">{item.text ?? item.description}</p>
+          </div>
+        ) : item.type === 'link' ? (
+          <span className="item-thumb__brand">{getLinkLabel(item.url)}</span>
         ) : (
           <ItemTypeIcon type={item.type} size={28} strokeWidth={1.5} />
         )}
@@ -96,7 +105,7 @@ export function SavedItemCard({
             onTagClick ? (
               <button
                 type="button"
-                className="tag-chip tag-chip--button"
+                className={`tag-chip tag-chip--button ${tagColorClass(tag)}`}
                 key={tag}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -106,7 +115,7 @@ export function SavedItemCard({
                 {tag}
               </button>
             ) : (
-              <span className="tag-chip" key={tag}>
+              <span className={`tag-chip ${tagColorClass(tag)}`} key={tag}>
                 {tag}
               </span>
             )

@@ -1,8 +1,8 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
-import { Clipboard, FileText, Image as ImageIcon, Link2, Star, Trash2, X } from 'lucide-react';
+import { Clipboard, Image as ImageIcon, Link2, Quote, Star, Trash2, X } from 'lucide-react';
 import type { Project, SavedItem } from '../../domain/savedItem';
 import { formatBytes, formatItemDate } from '../../lib/format';
-import { getSavedItemPreviewImage } from '../../lib/previewImages';
+import { getLinkLabel, getSavedItemPreviewImage } from '../../lib/previewImages';
 import { SurfaceCard } from '../../components/SurfaceCard';
 import { SettingsSection } from '../../components/SettingsSection';
 
@@ -190,15 +190,19 @@ export function ItemDetailPanel({
                     onError={() => setFailedPreviewImage(previewImage ?? null)}
                   />
                 </figure>
+              ) : currentItem.type === 'snippet' && previewText ? (
+                <div className="note-preview note-preview--lg">
+                  <Quote className="note-preview__mark" size={18} strokeWidth={2} aria-hidden="true" />
+                  <p className="note-preview__text">{previewText}</p>
+                </div>
+              ) : currentItem.type === 'link' ? (
+                <div className="detail-panel__preview-brand" aria-label={`${typeLabel} preview`}>
+                  <Link2 className="detail-panel__preview-icon" size={24} strokeWidth={1.5} aria-hidden="true" />
+                  <span>{getLinkLabel(currentItem.url)}</span>
+                </div>
               ) : (
                 <div className="detail-panel__preview-empty" aria-label={`${typeLabel} preview`}>
-                  {currentItem.url ? (
-                    <Link2 className="detail-panel__preview-icon" size={28} strokeWidth={1.5} aria-hidden="true" />
-                  ) : currentItem.type === 'snippet' ? (
-                    <FileText className="detail-panel__preview-icon" size={28} strokeWidth={1.5} aria-hidden="true" />
-                  ) : (
-                    <ImageIcon className="detail-panel__preview-icon" size={28} strokeWidth={1.5} aria-hidden="true" />
-                  )}
+                  <ImageIcon className="detail-panel__preview-icon" size={28} strokeWidth={1.5} aria-hidden="true" />
                   <span>{getPreviewFallbackText(currentItem)}</span>
                 </div>
               )}
@@ -212,7 +216,7 @@ export function ItemDetailPanel({
               </p>
             ) : null}
 
-            {previewText ? (
+            {previewText && currentItem.type !== 'snippet' ? (
               <div className="detail-panel__body detail-panel__content-section">
                 <h3>Content</h3>
                 <p>{previewText}</p>

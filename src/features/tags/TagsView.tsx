@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
+import { Tags as TagsIcon } from 'lucide-react';
 import type { SavedItem, SavedItemType, ScreenieSort } from '../../domain/savedItem';
-import { SavedItemCard } from '../../components/SavedItemCard';
-import { PageHeader } from '../../components/PageHeader';
 import { SectionLabel } from '../../components/SectionLabel';
-import { SurfaceCard } from '../../components/SurfaceCard';
 import { FilterMenu } from '../../components/FilterMenu';
 import { searchSavedItems } from '../../lib/search/searchSavedItems';
+import { tagColorClass } from '../../lib/tagColor';
+import { CollectionView } from '../collection/CollectionView';
 
 interface TagsViewProps {
   items: SavedItem[];
@@ -65,76 +65,68 @@ export function TagsView({
     tags: tagFilter.length > 0 ? tagFilter : undefined
   });
 
-  return (
-    <div className="saved-view page-stack">
-      <PageHeader
-        titleId="tags-title"
-        title="Tags"
-        subtitle="Browse saved content by tag."
-        actions={
-          <FilterMenu
-            open={filterOpen}
-            typeFilter={typeFilter}
-            tagFilter={tagFilter}
-            availableTags={availableTags}
-            onOpenChange={onFilterOpenChange}
-            onTypeFilterChange={onTypeFilterChange}
-            onTagFilterChange={onTagFilterChange}
-            onClear={onClearFilters}
-          />
-        }
-      />
-
-      <SurfaceCard as="section" className="content-section" aria-labelledby="tags-title">
-        {tagCounts.length > 0 ? (
-          <>
-            <SectionLabel>All tags</SectionLabel>
-            <div className="tag-browser" aria-label="All tags">
-            {tagCounts.map(([tag, count]) => (
+  const tagBrowser =
+    tagCounts.length > 0 ? (
+      <div className="library-section tags-browser">
+        <SectionLabel>All tags</SectionLabel>
+        <div className="tag-browser" aria-label="All tags">
+          {tagCounts.map(([tag, count]) => {
+            const active = tagFilter.includes(tag);
+            return (
               <button
                 key={tag}
                 type="button"
-                className={`tag-chip tag-chip--button${tagFilter.includes(tag) ? ' tag-chip--active' : ''}`}
-                aria-pressed={tagFilter.includes(tag)}
+                className={`tag-chip tag-chip--button ${tagColorClass(tag)}${active ? ' tag-chip--active' : ''}`}
+                aria-pressed={active}
                 onClick={() => onTagClick(tag)}
               >
                 {tag}
                 <span className="tag-count">{count}</span>
               </button>
-            ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-muted">No tags yet. Tags are added when you save links, snippets, and images.</p>
-        )}
+            );
+          })}
+        </div>
+      </div>
+    ) : (
+      <p className="text-muted">No tags yet. Tags are added when you save links, snippets, and images.</p>
+    );
 
-        <p className="text-muted saved-view__meta">
-          {results.length} {results.length === 1 ? 'item' : 'items'}
-          {tagFilter.length > 0 ? ` tagged ${tagFilter.join(', ')}` : ' with tags'}.
-        </p>
-
-        {results.length > 0 ? (
-          <div className="item-list">
-            {results.map((result) => (
-              <SavedItemCard
-                key={result.item.id}
-                item={result.item}
-                onToggleFavorite={onToggleFavorite}
-                onMoveToTrash={onMoveToTrash}
-                onRestore={onRestore}
-                onOpenDetail={onOpenDetail}
-                onTagClick={onTagClick}
-                onDeletePermanently={onDeletePermanently}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <h2>No tagged items.</h2>
-            <p>Select a tag above or save content with tags.</p>
-          </div>
-        )}
-      </SurfaceCard>
-    </div>
+  return (
+    <CollectionView
+      titleId="tags-title"
+      eyebrow="Browse"
+      title="Tags"
+      subtitle="Browse saved content by tag."
+      actions={
+        <FilterMenu
+          open={filterOpen}
+          typeFilter={typeFilter}
+          tagFilter={tagFilter}
+          availableTags={availableTags}
+          onOpenChange={onFilterOpenChange}
+          onTypeFilterChange={onTypeFilterChange}
+          onTagFilterChange={onTagFilterChange}
+          onClear={onClearFilters}
+        />
+      }
+      header={tagBrowser}
+      metaText={`${results.length} ${results.length === 1 ? 'item' : 'items'}${
+        tagFilter.length > 0 ? ` tagged ${tagFilter.join(', ')}` : ' with tags'
+      }.`}
+      results={results}
+      empty={{
+        icon: <TagsIcon size={22} strokeWidth={1.5} />,
+        title: 'No tagged items.',
+        description: 'Select a tag above or save content with tags.'
+      }}
+      handlers={{
+        onToggleFavorite,
+        onMoveToTrash,
+        onRestore,
+        onOpenDetail,
+        onTagClick,
+        onDeletePermanently
+      }}
+    />
   );
 }

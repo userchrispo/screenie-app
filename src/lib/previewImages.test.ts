@@ -1,25 +1,47 @@
 import type { SavedItem } from '../domain/savedItem';
-import { getLinkScreenshotUrl, getSavedItemPreviewImage } from './previewImages';
+import { getLinkLabel, getSavedItemPreviewImage } from './previewImages';
 
 describe('preview image helpers', () => {
-  it('builds an mShots screenshot URL for saved web links', () => {
-    expect(getLinkScreenshotUrl('https://screenie.app/pricing')).toBe(
-      'https://s.wordpress.com/mshots/v1/https%3A%2F%2Fscreenie.app%2Fpricing?w=900'
-    );
-  });
-
-  it('does not build screenshot URLs for unsupported protocols', () => {
-    expect(getLinkScreenshotUrl('javascript:alert(1)')).toBeUndefined();
-    expect(getLinkScreenshotUrl('ftp://screenie.app/file')).toBeUndefined();
-  });
-
-  it('prefers local image data before deriving a link screenshot URL', () => {
+  it('returns local image data for captures that have it', () => {
     const item = {
-      type: 'link',
-      url: 'https://screenie.app/pricing',
+      type: 'screenshot',
       imageDataUrl: 'data:image/png;base64,local-preview'
     } satisfies Pick<SavedItem, 'type' | 'url' | 'imageDataUrl'>;
 
     expect(getSavedItemPreviewImage(item)).toBe('data:image/png;base64,local-preview');
+  });
+
+  it('does not derive a preview image for links', () => {
+    const item = {
+      type: 'link',
+      url: 'https://screenie.app/pricing'
+    } satisfies Pick<SavedItem, 'type' | 'url' | 'imageDataUrl'>;
+
+    expect(getSavedItemPreviewImage(item)).toBeUndefined();
+  });
+
+  it('does not derive a preview image for snippets', () => {
+    const item = {
+      type: 'snippet'
+    } satisfies Pick<SavedItem, 'type' | 'url' | 'imageDataUrl'>;
+
+    expect(getSavedItemPreviewImage(item)).toBeUndefined();
+  });
+});
+
+describe('getLinkLabel', () => {
+  it('derives the brand name from common hostnames', () => {
+    expect(getLinkLabel('https://screenie.app/pricing')).toBe('Screenie');
+    expect(getLinkLabel('https://cursor.com/dashboard')).toBe('Cursor');
+    expect(getLinkLabel('https://authenticator.cursor.sh/verify')).toBe('Cursor');
+  });
+
+  it('ignores a leading www prefix', () => {
+    expect(getLinkLabel('https://www.github.com/anthropics')).toBe('Github');
+  });
+
+  it('falls back gracefully for missing or invalid URLs', () => {
+    expect(getLinkLabel(undefined)).toBe('Link');
+    expect(getLinkLabel('not a url')).toBe('not a url');
   });
 });

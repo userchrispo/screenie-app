@@ -9,13 +9,13 @@ describe('CapturePanel metadata', () => {
 
     render(<CapturePanel onCreate={onCreate} />);
 
-    await user.click(screen.getByRole('button', { name: /Paste link/i }));
-    fireEvent.change(screen.getByLabelText('Paste link'), {
+    fireEvent.change(screen.getByLabelText('Link URL'), {
       target: { value: 'https://screenie.app/pricing' }
     });
+    await user.click(screen.getByRole('button', { name: 'Add title & tags' }));
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Pricing page' } });
     fireEvent.change(screen.getByLabelText('Tags'), { target: { value: '#Pricing, Research' } });
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
 
     expect(onCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -31,9 +31,9 @@ describe('CapturePanel metadata', () => {
 
     render(<CapturePanel onCreate={onCreate} />);
 
-    await user.click(screen.getByRole('button', { name: /Drop screenshot/i }));
+    await user.click(screen.getByRole('button', { name: 'Screenshot' }));
     const file = new File(['screenie preview'], 'screen-capture.png', { type: 'image/png' });
-    fireEvent.change(screen.getByLabelText('Drop screenshot'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Add image'), { target: { files: [file] } });
 
     expect(screen.getByText('1 image ready')).toBeTruthy();
     expect(screen.getByText('screen-capture.png')).toBeTruthy();

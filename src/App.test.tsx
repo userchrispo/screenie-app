@@ -9,7 +9,7 @@ describe('App', () => {
     expect(screen.getByRole('main', { name: /screenie app/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Inbox' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /capture workspace/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /paste link/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save link' })).toBeInTheDocument();
   });
 
   it('navigates to Find and returns seeded pricing results', async () => {

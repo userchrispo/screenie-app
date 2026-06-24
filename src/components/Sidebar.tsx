@@ -4,6 +4,8 @@ import {
   Folder,
   Inbox,
   LayoutTemplate,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   Puzzle,
@@ -35,6 +37,8 @@ interface SidebarProps {
   counts: SidebarCounts;
   projects: Project[];
   activeProjectId: string | null;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
   onNavigate: (view: ScreenieView) => void;
   onSelectProject: (projectId: string) => void;
   onClearProject: () => void;
@@ -60,6 +64,8 @@ export function Sidebar({
   counts,
   projects,
   activeProjectId,
+  collapsed = false,
+  onToggleCollapse,
   onNavigate,
   onSelectProject,
   onClearProject,
@@ -165,18 +171,38 @@ export function Sidebar({
   }
 
   return (
-    <aside className="sidebar" aria-label="Primary navigation">
-      <button className="brand" type="button" onClick={() => onNavigate('inbox')}>
-        <span className="brand-icon" aria-hidden="true">
-          <span />
-        </span>
-        <span>Screenie</span>
-      </button>
+    <aside
+      className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}
+      aria-label="Primary navigation"
+    >
+      <div className="sidebar-header">
+        <button className="brand" type="button" onClick={() => onNavigate('inbox')}>
+          <span className="brand-icon" aria-hidden="true">
+            <span />
+          </span>
+          <span className="brand__label">Screenie</span>
+        </button>
+        {onToggleCollapse ? (
+          <button
+            type="button"
+            className="icon-button sidebar-collapse-toggle"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapse}
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={18} strokeWidth={1.5} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={18} strokeWidth={1.5} aria-hidden="true" />
+            )}
+          </button>
+        ) : null}
+      </div>
 
       <button
         type="button"
         className="workspace-pill"
-        aria-label="Local workspace settings"
+        aria-label={`Local workspace settings. ${counts.library} saves, ${counts.projects} projects.`}
         onClick={() => onNavigate('settings')}
       >
         <span className="workspace-pill__avatar" aria-hidden="true">
@@ -200,6 +226,7 @@ export function Sidebar({
                 <SidebarButton
                   key={item.id}
                   item={item}
+                  collapsed={collapsed}
                   isActive={activeView === item.id}
                   onClick={() => onNavigate(item.id)}
                 />
@@ -351,14 +378,18 @@ export function Sidebar({
 
 function SidebarButton({
   item,
+  collapsed,
   isActive,
   onClick
 }: {
   item: NavItem;
+  collapsed: boolean;
   isActive: boolean;
   onClick: () => void;
 }) {
   const Icon = item.icon;
+  const ariaLabel =
+    typeof item.count === 'number' ? `${item.label} (${item.count})` : item.label;
 
   return (
     <button
@@ -366,6 +397,7 @@ function SidebarButton({
       type="button"
       onClick={onClick}
       aria-current={isActive ? 'page' : undefined}
+      aria-label={collapsed ? ariaLabel : undefined}
     >
       <span className="icon-slot">
         <Icon size={18} strokeWidth={1.5} aria-hidden="true" />

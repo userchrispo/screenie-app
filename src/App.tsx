@@ -1,12 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Inbox as InboxIcon,
+  Library as LibraryIcon,
+  Plus as PlusIcon,
+  Plug as PlugIcon,
+  Search as SearchIcon,
+  Settings as SettingsIcon,
+  Star as StarIcon,
+  SunMoon,
+  Tags as TagsIcon,
+  LayoutTemplate as TemplateIcon,
+  Trash2 as TrashIcon
+} from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
-import { PageHeader } from './components/PageHeader';
-import { SavedItemCard } from './components/SavedItemCard';
-import { SurfaceCard } from './components/SurfaceCard';
 import { FilterMenu } from './components/FilterMenu';
 import { ViewTransition } from './components/ViewTransition';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { CommandPalette, type Command } from './components/CommandPalette';
+import { useToast } from './components/ToastProvider';
+import { getStoredPreference, resolveTheme, setThemePreference } from './lib/theme';
+import { usePreferences } from './lib/usePreferences';
+import { CollectionView } from './features/collection/CollectionView';
 import type {
   CreateSavedItemInput,
   SavedItem,
@@ -74,7 +89,10 @@ export function App() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [extensionDraft, setExtensionDraft] = useState<CaptureDraft | null>(null);
   const [extensionSaving, setExtensionSaving] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
+  const { showToast } = useToast();
+  const { preferences, update: updatePreferences } = usePreferences();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const {
     items,
@@ -172,14 +190,17 @@ export function App() {
 
   async function toggleFavorite(item: SavedItem) {
     await updateItem(item.id, { isFavorite: !item.isFavorite });
+    showToast(item.isFavorite ? 'Removed from favorites.' : 'Added to favorites.', 'success');
   }
 
   async function moveToTrash(item: SavedItem) {
     await updateItem(item.id, { status: 'trash' });
+    showToast('Moved to trash.');
   }
 
   async function restoreItem(item: SavedItem) {
     await updateItem(item.id, { status: 'active' });
+    showToast('Restored to library.', 'success');
   }
 
   const runOcrForItem = useCallback(
@@ -225,6 +246,13 @@ export function App() {
     [createItem, runOcrForItem]
   );
 
+  const runAllQueuedOcr = useCallback(async () => {
+    const queued = items.filter((item) => !item.extractedText && canRunOcr(item));
+    for (const item of queued) {
+      await runOcrForItem(item);
+    }
+  }, [items, runOcrForItem]);
+
   async function deletePermanently(item: SavedItem) {
     setPendingDeleteItem(item);
   }
@@ -241,6 +269,7 @@ export function App() {
         setSelectedItemId(null);
       }
       setPendingDeleteItem(null);
+      showToast('Item deleted permanently.');
     } finally {
       setDeleteBusy(false);
     }
@@ -255,6 +284,7 @@ export function App() {
       tags: normalizeTags(input.tags.split(',').map((tag) => tag.trim())),
       projectId: input.projectId
     });
+    showToast('Changes saved.', 'success');
   }
 
   async function handleClearAll() {
@@ -278,9 +308,15 @@ export function App() {
       setExtensionDraft(null);
       setSelectedItemId(item.id);
       setActiveView('inbox');
+      showToast('Capture saved to inbox.', 'success');
     } finally {
       setExtensionSaving(false);
     }
+  }
+
+  function toggleTheme() {
+    const current = resolveTheme(getStoredPreference());
+    setThemePreference(current === 'dark' ? 'light' : 'dark');
   }
 
   useEffect(() => {
@@ -290,9 +326,22 @@ export function App() {
     }
   }, [activeView, pendingSearchFocus]);
 
+  // Clear the applied template after the capture panel has consumed its initial
+  // values (child effects run before this parent effect), so a later quick-capture
+  // does not re-inject a stale template.
+  useEffect(() => {
+    if (captureTemplate) {
+      setCaptureTemplate(null);
+    }
+  }, [captureTemplate, captureFocusToken]);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        if (paletteOpen) {
+          setPaletteOpen(false);
+          return;
+        }
         if (selectedItemId) {
           setSelectedItemId(null);
           return;
@@ -304,7 +353,7 @@ export function App() {
 
       if (isModKey(event) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        focusSearch();
+        setPaletteOpen((open) => !open);
         return;
       }
 
@@ -316,7 +365,7 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [closeOverlays, filterOpen, notificationsOpen, selectedItemId]);
+  }, [closeOverlays, filterOpen, notificationsOpen, paletteOpen, selectedItemId]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -357,14 +406,36 @@ export function App() {
     onClearFilters: clearFilters
   };
 
+  const iconProps = { size: 18, strokeWidth: 1.5 } as const;
+  const commands: Command[] = [
+    { id: 'go-inbox', label: 'Go to Inbox', group: 'Navigate', icon: <InboxIcon {...iconProps} />, run: () => handleNavigate('inbox') },
+    { id: 'go-find', label: 'Go to Find', group: 'Navigate', icon: <SearchIcon {...iconProps} />, run: () => handleNavigate('find') },
+    { id: 'go-library', label: 'Go to Library', group: 'Navigate', icon: <LibraryIcon {...iconProps} />, run: () => handleNavigate('library') },
+    { id: 'go-favorites', label: 'Go to Favorites', group: 'Navigate', icon: <StarIcon {...iconProps} />, run: () => handleNavigate('favorites') },
+    { id: 'go-tags', label: 'Go to Tags', group: 'Navigate', icon: <TagsIcon {...iconProps} />, run: () => handleNavigate('tags') },
+    { id: 'go-trash', label: 'Go to Trash', group: 'Navigate', icon: <TrashIcon {...iconProps} />, run: () => handleNavigate('trash') },
+    { id: 'go-integrations', label: 'Go to Integrations', group: 'Navigate', icon: <PlugIcon {...iconProps} />, run: () => handleNavigate('integrations') },
+    { id: 'go-templates', label: 'Go to Templates', group: 'Navigate', icon: <TemplateIcon {...iconProps} />, run: () => handleNavigate('templates') },
+    { id: 'go-settings', label: 'Go to Settings', group: 'Navigate', icon: <SettingsIcon {...iconProps} />, run: () => handleNavigate('settings') },
+    { id: 'action-capture', label: 'Capture new item', group: 'Actions', hint: '⌘⇧S', icon: <PlusIcon {...iconProps} />, run: focusCapture },
+    { id: 'action-search', label: 'Search everything', group: 'Actions', icon: <SearchIcon {...iconProps} />, run: focusSearch },
+    { id: 'action-theme', label: 'Toggle light / dark theme', group: 'Actions', icon: <SunMoon {...iconProps} />, run: toggleTheme }
+  ];
+
+  function toggleSidebar() {
+    updatePreferences({ sidebarCollapsed: !preferences.sidebarCollapsed });
+  }
+
   return (
     <div className="app-frame">
-      <div className="screenie-shell">
+      <div className={`screenie-shell${preferences.sidebarCollapsed ? ' screenie-shell--collapsed' : ''}`}>
         <Sidebar
           activeView={activeView}
           counts={counts}
           projects={projects}
           activeProjectId={projectId}
+          collapsed={preferences.sidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
           onNavigate={handleNavigate}
           onSelectProject={handleSelectProject}
           onClearProject={() => setProjectId(null)}
@@ -378,12 +449,15 @@ export function App() {
               activeView={activeView}
               searchText={searchText}
               searchInputRef={searchInputRef}
+              sidebarCollapsed={preferences.sidebarCollapsed}
+              onToggleSidebar={toggleSidebar}
               onSearchTextChange={setSearchText}
               onFocusSearch={focusSearch}
               onNavigateHome={() => setActiveView('inbox')}
               onOpenNotifications={() => setNotificationsOpen(true)}
               onNavigateSettings={() => setActiveView('settings')}
               onOpenFilter={() => setFilterOpen(true)}
+              onOpenCommandPalette={() => setPaletteOpen(true)}
             />
 
             {error ? (
@@ -402,6 +476,7 @@ export function App() {
                   initialCaptureMode={captureTemplate?.mode ?? null}
                   initialSnippet={captureTemplate?.mode === 'snippet' ? captureTemplate.body : ''}
                   initialLink={captureTemplate?.mode === 'link' ? captureTemplate.body : ''}
+                  initialTags={captureTemplate?.tags?.join(', ') ?? ''}
                   captureFocusToken={captureFocusToken}
                   {...cardHandlers}
                 />
@@ -429,60 +504,54 @@ export function App() {
               ) : activeView === 'tags' ? (
                 <TagsView items={items} sortBy={sortBy} {...filterProps} {...cardHandlers} />
               ) : activeView === 'integrations' ? (
-                <IntegrationsView />
+                <IntegrationsView items={items} onRunAllOcr={runAllQueuedOcr} />
               ) : activeView === 'templates' ? (
                 <TemplatesView onSelectTemplate={handleSelectTemplate} />
               ) : activeView === 'settings' ? (
                 <SettingsView
+                  items={items}
+                  projects={projects}
                   onClearAll={handleClearAll}
                   onExportWorkspace={exportWorkspace}
                   onImportWorkspace={importWorkspace}
                   onResetDemo={handleResetDemo}
+                  onRunAllOcr={runAllQueuedOcr}
                 />
               ) : (
-                <div className="saved-view page-stack">
-                  <PageHeader
-                    titleId="saved-view-title"
-                    title={filterTitles[activeView]}
-                    subtitle={filterSubtitles[activeView]}
-                    actions={
-                      <FilterMenu
-                        open={filterOpen}
-                        typeFilter={typeFilter}
-                        tagFilter={tagFilter}
-                        availableTags={availableTags}
-                        onOpenChange={setFilterOpen}
-                        onTypeFilterChange={setTypeFilter}
-                        onTagFilterChange={setTagFilter}
-                        onClear={clearFilters}
-                      />
-                    }
-                  />
-                  <SurfaceCard as="section" className="content-section" aria-labelledby="saved-view-title">
-                    <p className="text-muted saved-view__meta">
-                      {filteredResults.length} {filteredResults.length === 1 ? 'item' : 'items'} in this view.
-                    </p>
-
-                    {filteredResults.length > 0 ? (
-                      <div className="item-list">
-                        {filteredResults.map((result) => (
-                          <SavedItemCard
-                            key={result.item.id}
-                            item={result.item}
-                            matchedText={result.matchedText}
-                            matchSummary={result.matchSummary}
-                            {...cardHandlers}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="empty-state">
-                        <h2>Nothing here yet.</h2>
-                        <p>Saved content will appear here once it matches this view.</p>
-                      </div>
-                    )}
-                  </SurfaceCard>
-                </div>
+                <CollectionView
+                  titleId="saved-view-title"
+                  eyebrow="Browse"
+                  title={filterTitles[activeView]}
+                  subtitle={filterSubtitles[activeView]}
+                  actions={
+                    <FilterMenu
+                      open={filterOpen}
+                      typeFilter={typeFilter}
+                      tagFilter={tagFilter}
+                      availableTags={availableTags}
+                      onOpenChange={setFilterOpen}
+                      onTypeFilterChange={setTypeFilter}
+                      onTagFilterChange={setTagFilter}
+                      onClear={clearFilters}
+                    />
+                  }
+                  metaText={`${filteredResults.length} ${filteredResults.length === 1 ? 'item' : 'items'} in this view.`}
+                  results={filteredResults}
+                  empty={{
+                    icon:
+                      activeView === 'trash' ? (
+                        <TrashIcon size={22} strokeWidth={1.5} />
+                      ) : (
+                        <StarIcon size={22} strokeWidth={1.5} />
+                      ),
+                    title: activeView === 'trash' ? 'Trash is empty.' : 'No favorites yet.',
+                    description:
+                      activeView === 'trash'
+                        ? 'Items you move to trash will appear here until restored or deleted.'
+                        : 'Star items from any view to keep them close.'
+                  }}
+                  handlers={cardHandlers}
+                />
               )}
             </ViewTransition>
           </div>
@@ -528,6 +597,7 @@ export function App() {
         onConfirm={() => void confirmDeletePermanently()}
         onClose={() => setPendingDeleteItem(null)}
       />
+      <CommandPalette open={paletteOpen} commands={commands} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

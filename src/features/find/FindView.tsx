@@ -1,10 +1,12 @@
-import type { ReactNode, RefObject } from 'react';
-import { CircleHelp, ScanText, Search, SlidersHorizontal, Star, Tags } from 'lucide-react';
+import type { RefObject } from 'react';
+import { CircleHelp, ScanText, Search, SearchX, Star } from 'lucide-react';
 import type { SavedItem, SavedItemType, ScreenieFilter, ScreenieSort } from '../../domain/savedItem';
 import { SavedItemCard } from '../../components/SavedItemCard';
 import { PageHeader } from '../../components/PageHeader';
 import { SurfaceCard } from '../../components/SurfaceCard';
+import { EmptyState } from '../../components/EmptyState';
 import { searchSavedItems } from '../../lib/search/searchSavedItems';
+import { tagColorClass } from '../../lib/tagColor';
 
 interface FindViewProps {
   items: SavedItem[];
@@ -54,13 +56,14 @@ export function FindView({
   const ocrMatchCount = results.filter(
     (result) => result.matchedText || result.matchSummary?.toLowerCase().includes('ocr')
   ).length;
-  const topTags = getTopTags(resultItems, 6);
+  const topTags = getTopTags(resultItems, 10);
   const activeFilters = getActiveFilters({ filter, projectId, typeFilter, tagFilter });
 
   return (
-    <div className="find-view page-stack dashboard-view dashboard-view--find">
+    <div className="find-view page-stack">
       <PageHeader
         titleId="find-title"
+        eyebrow="Search"
         title="Find"
         subtitle="Search across screenshots, links, snippets, tags, and OCR text."
         actions={
@@ -76,129 +79,86 @@ export function FindView({
         }
       />
 
-      <div className="dashboard-layout dashboard-layout--find" aria-labelledby="find-title">
-        <main className="dashboard-layout__main find-dashboard__results" aria-label="Search results">
-          <section className="results-toolbar find-dashboard__summary" aria-label="Search results summary">
-            <div>
-              <p>{results.length} results found</p>
-              <span>{getSearchSummary(searchText, activeFilters)}</span>
+      <SurfaceCard as="section" className="content-section" aria-labelledby="find-title">
+        <div className="results-toolbar" aria-label="Search results summary">
+          <div className="results-toolbar__count">
+            <strong>{results.length} results found</strong>
+            <span>{getSearchSummary(searchText, activeFilters)}</span>
+          </div>
+
+          <div className="find-metrics" aria-label="Search result metrics">
+            <span>
+              <Search size={15} strokeWidth={1.75} aria-hidden="true" /> <strong>{results.length}</strong> matches
+            </span>
+            <span>
+              <Star size={15} strokeWidth={1.75} aria-hidden="true" /> <strong>{favoriteCount}</strong> favorites
+            </span>
+            <span>
+              <ScanText size={15} strokeWidth={1.75} aria-hidden="true" /> <strong>{ocrMatchCount}</strong> OCR hits
+            </span>
+          </div>
+        </div>
+
+        {activeFilters.length > 0 ? (
+          <div className="filter-chip-row" aria-label="Active search filters">
+            {activeFilters.map((activeFilter) => (
+              <span key={activeFilter}>{activeFilter}</span>
+            ))}
+          </div>
+        ) : null}
+
+        {topTags.length > 0 ? (
+          <div className="inbox-tags" aria-label="Refine by tag">
+            <span className="inbox-tags__label">Refine by tag</span>
+            <div className="tag-cloud">
+              {topTags.map(({ tag, count }) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`tag-chip tag-chip--button ${tagColorClass(tag)}${
+                    tagFilter.includes(tag) ? ' tag-chip--active' : ''
+                  }`}
+                  aria-pressed={tagFilter.includes(tag)}
+                  onClick={() => onTagClick(tag)}
+                >
+                  {tag}
+                  <span className="tag-count">{count}</span>
+                </button>
+              ))}
             </div>
+          </div>
+        ) : null}
 
-            <div className="filter-chip-row find-dashboard__active-filters" aria-label="Active search filters">
-              {activeFilters.length > 0 ? (
-                activeFilters.map((activeFilter) => <span key={activeFilter}>{activeFilter}</span>)
-              ) : (
-                <span>All saved memory</span>
-              )}
-            </div>
-          </section>
+        {results.length > 0 ? (
+          <div className="item-list dashboard-card-grid">
+            {results.map((result) => (
+              <SavedItemCard
+                key={result.item.id}
+                item={result.item}
+                matchedText={result.matchedText}
+                matchSummary={result.matchSummary}
+                onToggleFavorite={onToggleFavorite}
+                onMoveToTrash={onMoveToTrash}
+                onRestore={onRestore}
+                onOpenDetail={onOpenDetail}
+                onTagClick={onTagClick}
+                onDeletePermanently={onDeletePermanently}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={<SearchX size={22} strokeWidth={1.5} />}
+            title="No saved item matched that search."
+            description="Try a tag, filename, URL, or remembered OCR text."
+          />
+        )}
+      </SurfaceCard>
 
-          {results.length > 0 ? (
-            <section className="content-section find-dashboard__result-section" aria-labelledby="find-results-title">
-              <div className="section-header">
-                <div>
-                  <h2 id="find-results-title">Ranked matches</h2>
-                  <p className="text-muted">Open a card to review the full save and edit its memory details.</p>
-                </div>
-              </div>
-
-              <div className="item-list dashboard-card-grid find-dashboard__result-grid">
-                {results.map((result) => (
-                  <SavedItemCard
-                    key={result.item.id}
-                    item={result.item}
-                    matchedText={result.matchedText}
-                    matchSummary={result.matchSummary}
-                    onToggleFavorite={onToggleFavorite}
-                    onMoveToTrash={onMoveToTrash}
-                    onRestore={onRestore}
-                    onOpenDetail={onOpenDetail}
-                    onTagClick={onTagClick}
-                    onDeletePermanently={onDeletePermanently}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : (
-            <div className="empty-state find-dashboard__empty">
-              <SlidersHorizontal size={18} strokeWidth={1.5} aria-hidden="true" />
-              <h2>No saved item matched that search.</h2>
-              <p>Try a tag, filename, URL, or remembered OCR text.</p>
-            </div>
-          )}
-
-          <p className="find-tip">
-            <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
-            <span>Tip: Search by text, tags, names, dates, OCR, and more.</span>
-          </p>
-        </main>
-
-        <aside className="dashboard-layout__aside find-dashboard__rail" aria-label="Find insights">
-          <SurfaceCard
-            as="section"
-            className="content-section dashboard-rail-card find-dashboard__query-card"
-            aria-labelledby="find-query-title"
-          >
-            <div className="section-header">
-              <div>
-                <h2 id="find-query-title">Search memory</h2>
-                <p className="text-muted">The current result set, summarized for quick scanning.</p>
-              </div>
-            </div>
-
-            <div className="find-dashboard__metric-grid" aria-label="Search result metrics">
-              <FindMetric icon={<Search size={18} strokeWidth={1.5} />} label="Matches" value={results.length} />
-              <FindMetric icon={<Star size={18} strokeWidth={1.5} />} label="Favorites" value={favoriteCount} />
-              <FindMetric icon={<ScanText size={18} strokeWidth={1.5} />} label="OCR hits" value={ocrMatchCount} />
-            </div>
-          </SurfaceCard>
-
-          <SurfaceCard
-            as="section"
-            className="content-section dashboard-rail-card find-dashboard__refine-card"
-            aria-labelledby="find-refine-title"
-          >
-            <div className="section-header">
-              <div>
-                <h2 id="find-refine-title">Refine lane</h2>
-                <p className="text-muted">Use tags and type filters to narrow this workspace.</p>
-              </div>
-            </div>
-
-            {topTags.length > 0 ? (
-              <div className="find-dashboard__tag-cloud" aria-label="Top result tags">
-                {topTags.map(({ tag, count }) => (
-                  <button key={tag} type="button" className="tag-chip" onClick={() => onTagClick(tag)}>
-                    <Tags size={14} strokeWidth={1.5} aria-hidden="true" />
-                    {tag}
-                    <span>{count}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state empty-state--compact">Matching tags will appear here.</div>
-            )}
-          </SurfaceCard>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-function FindMetric({
-  icon,
-  label,
-  value
-}: {
-  icon: ReactNode;
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="find-dashboard__metric">
-      <span aria-hidden="true">{icon}</span>
-      <strong>{value}</strong>
-      <small>{label}</small>
+      <p className="find-tip">
+        <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
+        <span>Tip: Search by text, tags, names, dates, OCR, and more.</span>
+      </p>
     </div>
   );
 }

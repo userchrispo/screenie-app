@@ -1,14 +1,18 @@
-import type { DragEvent, ReactNode } from 'react';
-import { FileImage, Link, Type } from 'lucide-react';
+import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import { Image as ImageIcon, Link, Paperclip, Type, Upload, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CreateSavedItemInput } from '../../domain/savedItem';
-import { CommandKey } from '../../components/CommandKey';
 import { SurfaceCard } from '../../components/SurfaceCard';
-import { modShortcutKeys } from '../../lib/keyboardShortcuts';
+import { usePreferences } from '../../lib/usePreferences';
 
-type CaptureMode = 'link' | 'image' | 'snippet' | null;
+type CaptureMode = 'link' | 'snippet' | 'image';
 type ImageSource = 'paste' | 'upload';
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+const MODES: { mode: CaptureMode; label: string; icon: ReactNode; tone: string }[] = [
+  { mode: 'link', label: 'Link', icon: <Link size={18} strokeWidth={1.75} />, tone: 'blue' },
+  { mode: 'snippet', label: 'Text', icon: <Type size={18} strokeWidth={1.75} />, tone: 'violet' },
+  { mode: 'image', label: 'Screenshot', icon: <ImageIcon size={18} strokeWidth={1.75} />, tone: 'teal' }
+];
 
 interface PendingImage {
   file: File;
@@ -17,9 +21,10 @@ interface PendingImage {
 
 interface CapturePanelProps {
   onCreate: (input: CreateSavedItemInput) => Promise<unknown>;
-  initialMode?: CaptureMode;
+  initialMode?: 'link' | 'snippet' | null;
   initialSnippet?: string;
   initialLink?: string;
+  initialTags?: string;
   captureFocusToken?: number;
 }
 
@@ -28,24 +33,29 @@ export function CapturePanel({
   initialMode = null,
   initialSnippet = '',
   initialLink = '',
+  initialTags = '',
   captureFocusToken = 0
 }: CapturePanelProps) {
-  const [activeMode, setActiveMode] = useState<CaptureMode>(initialMode);
+  const { preferences } = usePreferences();
+  const maxImageBytes = preferences.maxImageMb * 1024 * 1024;
+  const [mode, setMode] = useState<CaptureMode>(initialMode ?? preferences.defaultCaptureMode);
   const [linkValue, setLinkValue] = useState(initialLink);
   const [linkTitleValue, setLinkTitleValue] = useState('');
-  const [linkTagsValue, setLinkTagsValue] = useState('link, intake');
+  const [linkTagsValue, setLinkTagsValue] = useState(preferences.linkTags);
   const [snippetValue, setSnippetValue] = useState(initialSnippet);
   const [snippetTitleValue, setSnippetTitleValue] = useState('');
-  const [snippetTagsValue, setSnippetTagsValue] = useState('snippet, intake');
-  const [imageTagsValue, setImageTagsValue] = useState('image, intake');
+  const [snippetTagsValue, setSnippetTagsValue] = useState(preferences.snippetTags);
+  const [imageTagsValue, setImageTagsValue] = useState(preferences.imageTags);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [showDetails, setShowDetails] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [message, setMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (initialMode) {
-      setActiveMode(initialMode);
+      setMode(initialMode);
     }
   }, [initialMode, captureFocusToken]);
 
@@ -62,6 +72,20 @@ export function CapturePanel({
   }, [initialLink, captureFocusToken]);
 
   useEffect(() => {
+    if (!initialTags) {
+      return;
+    }
+
+    if (initialMode === 'snippet') {
+      setSnippetTagsValue(initialTags);
+      setShowDetails(true);
+    } else if (initialMode === 'link') {
+      setLinkTagsValue(initialTags);
+      setShowDetails(true);
+    }
+  }, [initialTags, initialMode, captureFocusToken]);
+
+  useEffect(() => {
     if (captureFocusToken > 0) {
       panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -70,7 +94,6 @@ export function CapturePanel({
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setActiveMode(null);
         setPendingImages([]);
       }
     }
@@ -79,26 +102,29 @@ export function CapturePanel({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const stageFiles = useCallback((files: FileList | File[], source: ImageSource) => {
+  const stageFiles = useCallback(
+    (files: FileList | File[], source: ImageSource) => {
     const imageFiles = Array.from(files);
-    const accepted = imageFiles.filter((file) => file.type.startsWith('image/') && file.size <= MAX_IMAGE_BYTES);
+    const accepted = imageFiles.filter((file) => file.type.startsWith('image/') && file.size <= maxImageBytes);
     const rejected = imageFiles.length - accepted.length;
 
     if (accepted.length === 0) {
       setPendingImages([]);
-      setActiveMode('image');
-      setMessage(rejected > 0 ? 'Choose image files under 10 MB.' : 'Choose an image first.');
+      setMode('image');
+      setMessage(rejected > 0 ? `Choose image files under ${preferences.maxImageMb} MB.` : 'Choose an image first.');
       return;
     }
 
     setPendingImages(accepted.map((file) => ({ file, source })));
-    setActiveMode('image');
+    setMode('image');
     setMessage(
       `${accepted.length} ${accepted.length === 1 ? 'image' : 'images'} ready to review.${
         rejected > 0 ? ` ${rejected} skipped.` : ''
       }`
     );
-  }, []);
+    },
+    [maxImageBytes, preferences.maxImageMb]
+  );
 
   const handleClipboardData = useCallback(
     (clipboardData: DataTransfer | null) => {
@@ -119,13 +145,13 @@ export function CapturePanel({
 
       if (parseUrl(text)) {
         setLinkValue(text.trim());
-        setActiveMode('link');
+        setMode('link');
         setMessage('Clipboard URL ready to review.');
         return true;
       }
 
       setSnippetValue(text);
-      setActiveMode('snippet');
+      setMode('snippet');
       setMessage('Clipboard text ready to review.');
       return true;
     },
@@ -133,6 +159,10 @@ export function CapturePanel({
   );
 
   useEffect(() => {
+    if (!preferences.autoClipboardCapture) {
+      return;
+    }
+
     function onPaste(event: ClipboardEvent) {
       if (event.defaultPrevented || isEditableTarget(event.target)) {
         return;
@@ -145,7 +175,7 @@ export function CapturePanel({
 
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
-  }, [handleClipboardData]);
+  }, [handleClipboardData, preferences.autoClipboardCapture]);
 
   async function saveLink() {
     if (!linkValue.trim()) {
@@ -171,7 +201,6 @@ export function CapturePanel({
     });
     setLinkValue('');
     setLinkTitleValue('');
-    setActiveMode(null);
     setMessage('Link saved.');
   }
 
@@ -190,7 +219,6 @@ export function CapturePanel({
     });
     setSnippetValue('');
     setSnippetTitleValue('');
-    setActiveMode(null);
     setMessage('Snippet saved.');
   }
 
@@ -209,11 +237,11 @@ export function CapturePanel({
         tags: normalizeCaptureTags(imageTagsValue, [type, 'intake']),
         source,
         ocrStatus: 'queued',
-        ocrLanguage: 'eng',
+        ocrLanguage: preferences.ocrLanguage,
         thumbnailColor: 'hero'
       });
     },
-    [imageTagsValue, onCreate]
+    [imageTagsValue, onCreate, preferences.ocrLanguage]
   );
 
   async function savePendingImages() {
@@ -228,10 +256,7 @@ export function CapturePanel({
 
     const savedCount = pendingImages.length;
     setPendingImages([]);
-    setActiveMode(null);
-    setMessage(
-      `${savedCount} ${savedCount === 1 ? 'image' : 'images'} saved. OCR queued.`
-    );
+    setMessage(`${savedCount} ${savedCount === 1 ? 'image' : 'images'} saved. OCR queued.`);
   }
 
   async function pasteClipboardText(target: 'link' | 'snippet') {
@@ -280,15 +305,32 @@ export function CapturePanel({
     setMessage('No image found on the clipboard.');
   }
 
-  function handleImageDragOver(event: DragEvent<Element>) {
+  function handleDragOver(event: DragEvent<Element>) {
     event.preventDefault();
+    if (!isDragging) {
+      setIsDragging(true);
+    }
   }
 
-  function handleImageDrop(event: DragEvent<Element>) {
+  function handleDragLeave(event: DragEvent<Element>) {
+    if (event.currentTarget === event.target) {
+      setIsDragging(false);
+    }
+  }
+
+  function handleDrop(event: DragEvent<Element>) {
     event.preventDefault();
     event.stopPropagation();
+    setIsDragging(false);
     if (event.dataTransfer.files.length > 0) {
       stageFiles(event.dataTransfer.files, 'upload');
+    }
+  }
+
+  function handleLinkKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void saveLink();
     }
   }
 
@@ -296,242 +338,232 @@ export function CapturePanel({
     <SurfaceCard
       ref={panelRef}
       as="section"
-      className="capture-panel"
+      className={`capture-omni${isDragging ? ' capture-omni--dragging' : ''}`}
       aria-label="Capture saved content"
-      onDragOver={handleImageDragOver}
-      onDrop={handleImageDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
-      <div className="capture-grid">
-        <CaptureTile
-          mode="link"
-          activeMode={activeMode}
-          onActivate={() => setActiveMode('link')}
-          icon={<Link size={18} strokeWidth={1.5} />}
-          iconClass="tile-link"
-          title="Paste link"
-          subtitle="Save any URL"
-          shortcut={modShortcutKeys('V')}
-          shortcutLabel="Paste link shortcut"
-        >
-          <label htmlFor="link-input">Paste link</label>
-          <div className="input-row">
+      <div className="capture-omni__modes" role="group" aria-label="Capture type">
+        {MODES.map((option) => {
+          const active = mode === option.mode;
+          return (
+            <button
+              key={option.mode}
+              type="button"
+              className={`capture-mode${active ? ' capture-mode--active' : ''}`}
+              aria-pressed={active}
+              onClick={() => setMode(option.mode)}
+            >
+              <span className={`tile-vivid tile-vivid--${option.tone} capture-mode__icon`} aria-hidden="true">
+                {option.icon}
+              </span>
+              <span className="capture-mode__label">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="capture-omni__stage">
+        {mode === 'link' ? (
+          <div className="capture-omni__field">
+            <span className="capture-omni__lead" aria-hidden="true">
+              <Link size={18} strokeWidth={1.75} />
+            </span>
             <input
               id="link-input"
+              aria-label="Link URL"
+              className="capture-omni__input"
               value={linkValue}
               onChange={(event) => setLinkValue(event.target.value)}
-              placeholder="https://www.notion.so/..."
+              onKeyDown={handleLinkKeyDown}
+              placeholder="Paste a link to save it to your inbox…"
             />
-            <button type="button" onClick={() => void saveLink()}>
-              Save
-            </button>
-            <button type="button" onClick={() => void pasteClipboardText('link')}>
-              Paste clipboard
+            <button type="button" className="btn btn--accent capture-omni__save" onClick={() => void saveLink()}>
+              Save link
             </button>
           </div>
-          <div className="capture-metadata-grid" aria-label="Link metadata">
-            <label htmlFor="link-title-input">Title</label>
-            <input
-              id="link-title-input"
-              value={linkTitleValue}
-              onChange={(event) => setLinkTitleValue(event.target.value)}
-              placeholder="Optional display title"
-            />
+        ) : null}
 
-            <label htmlFor="link-tags-input">Tags</label>
-            <input
-              id="link-tags-input"
-              value={linkTagsValue}
-              onChange={(event) => setLinkTagsValue(event.target.value)}
-              placeholder="link, intake"
+        {mode === 'snippet' ? (
+          <div className="capture-omni__field capture-omni__field--text">
+            <textarea
+              id="snippet-input"
+              aria-label="Note"
+              className="capture-omni__textarea"
+              value={snippetValue}
+              onChange={(event) => setSnippetValue(event.target.value)}
+              placeholder="Type or paste a note, quote, or idea…"
+              rows={3}
             />
-          </div>
-        </CaptureTile>
-
-        <CaptureTile
-          mode="image"
-          activeMode={activeMode}
-          onActivate={() => setActiveMode('image')}
-          icon={<FileImage size={18} strokeWidth={1.5} />}
-          iconClass="tile-image"
-          title="Drop screenshot"
-          subtitle="or image here"
-          shortcut={modShortcutKeys('Shift', 'V')}
-          shortcutLabel="Paste image shortcut"
-          className="drop-tile"
-          onDragOver={handleImageDragOver}
-          onDrop={handleImageDrop}
-        >
-          <label htmlFor="image-input">Drop screenshot</label>
-          <div className="capture-metadata-grid" aria-label="Image metadata">
-            <label htmlFor="image-tags-input">Tags</label>
-            <input
-              id="image-tags-input"
-              value={imageTagsValue}
-              onChange={(event) => setImageTagsValue(event.target.value)}
-              placeholder="image, intake"
-            />
-          </div>
-          {pendingImages.length > 0 ? (
-            <div className="pending-image-list" aria-label="Images ready to save">
-              <strong>
-                {pendingImages.length} {pendingImages.length === 1 ? 'image' : 'images'} ready
-              </strong>
-              <ul>
-                {pendingImages.map(({ file, source }) => (
-                  <li key={`${source}-${file.name}-${file.size}`}>
-                    <span>{file.name}</span>
-                    <small>{source === 'paste' ? 'Pasted from clipboard' : 'Added from file or drop'}</small>
-                  </li>
-                ))}
-              </ul>
+            <div className="capture-omni__field-actions">
+              <button type="button" className="btn btn--accent" onClick={() => void saveSnippet()}>
+                Save note
+              </button>
             </div>
-          ) : (
-            <p className="capture-helper">Paste, drop, or choose screenshots/images. OCR queues after save.</p>
-          )}
-          <input
-            ref={fileInputRef}
-            id="image-input"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(event) => {
-              if (event.target.files?.length) {
-                stageFiles(event.target.files, 'upload');
-              }
-              event.target.value = '';
-            }}
-          />
-          <button type="button" disabled={pendingImages.length === 0} onClick={() => void savePendingImages()}>
-            {pendingImages.length === 1 ? 'Save image' : 'Save images'}
-          </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()}>
-            Choose image
-          </button>
-          <button type="button" onClick={() => void pasteClipboardImage()}>
-            Paste image
-          </button>
-        </CaptureTile>
+          </div>
+        ) : null}
 
-        <CaptureTile
-          mode="snippet"
-          activeMode={activeMode}
-          onActivate={() => setActiveMode('snippet')}
-          icon={<Type size={18} strokeWidth={1.5} />}
-          iconClass="tile-snippet"
-          title="Save snippet"
-          subtitle="Capture text"
-          shortcut={modShortcutKeys('Shift', 'T')}
-          shortcutLabel="Save snippet shortcut"
-        >
-          <label htmlFor="snippet-input">Save snippet</label>
-          <textarea
-            id="snippet-input"
-            value={snippetValue}
-            onChange={(event) => setSnippetValue(event.target.value)}
-            placeholder="Capture text"
-            rows={3}
-          />
-          <div className="capture-metadata-grid" aria-label="Snippet metadata">
-            <label htmlFor="snippet-title-input">Title</label>
-            <input
-              id="snippet-title-input"
-              value={snippetTitleValue}
-              onChange={(event) => setSnippetTitleValue(event.target.value)}
-              placeholder="Optional display title"
-            />
+        {mode === 'image' ? (
+          <div
+            className="capture-omni__drop"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            {pendingImages.length > 0 ? (
+              <div className="pending-image-list" aria-label="Images ready to save">
+                <strong>
+                  {pendingImages.length} {pendingImages.length === 1 ? 'image' : 'images'} ready
+                </strong>
+                <ul>
+                  {pendingImages.map(({ file, source }) => (
+                    <li key={`${source}-${file.name}-${file.size}`}>
+                      <span>{file.name}</span>
+                      <small>{source === 'paste' ? 'Pasted from clipboard' : 'Added from file or drop'}</small>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="capture-omni__clear"
+                  aria-label="Clear staged images"
+                  onClick={() => {
+                    setPendingImages([]);
+                    setMessage('');
+                  }}
+                >
+                  <X size={14} strokeWidth={1.75} /> Clear
+                </button>
+              </div>
+            ) : (
+              <div className="capture-omni__dropzone">
+                <span className="capture-omni__dropicon" aria-hidden="true">
+                  <Upload size={20} strokeWidth={1.75} />
+                </span>
+                <p>
+                  Drop a screenshot here, paste with <kbd>Ctrl/⌘ V</kbd>, or browse your files.
+                </p>
+              </div>
+            )}
 
-            <label htmlFor="snippet-tags-input">Tags</label>
+            <div className="capture-omni__drop-actions">
+              <button
+                type="button"
+                className="btn btn--accent"
+                disabled={pendingImages.length === 0}
+                onClick={() => void savePendingImages()}
+              >
+                {pendingImages.length === 1 ? 'Save image' : 'Save images'}
+              </button>
+              <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
+                Browse files
+              </button>
+              <button type="button" className="btn" onClick={() => void pasteClipboardImage()}>
+                Paste image
+              </button>
+            </div>
             <input
-              id="snippet-tags-input"
-              value={snippetTagsValue}
-              onChange={(event) => setSnippetTagsValue(event.target.value)}
-              placeholder="snippet, intake"
+              ref={fileInputRef}
+              id="image-input"
+              className="capture-omni__file"
+              type="file"
+              accept="image/*"
+              aria-label="Add image"
+              multiple
+              onChange={(event) => {
+                if (event.target.files?.length) {
+                  stageFiles(event.target.files, 'upload');
+                }
+                event.target.value = '';
+              }}
             />
           </div>
-          <button type="button" onClick={() => void saveSnippet()}>
-            Save text
-          </button>
-          <button type="button" onClick={() => void pasteClipboardText('snippet')}>
-            Paste clipboard
-          </button>
-        </CaptureTile>
+        ) : null}
       </div>
+
+      <div className="capture-omni__footer">
+        <button
+          type="button"
+          className="capture-omni__details-toggle"
+          aria-expanded={showDetails}
+          onClick={() => setShowDetails((value) => !value)}
+        >
+          <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />
+          {showDetails ? 'Hide details' : 'Add title & tags'}
+        </button>
+        {mode === 'link' ? (
+          <button type="button" className="capture-omni__inline-action" onClick={() => void pasteClipboardText('link')}>
+            Paste from clipboard
+          </button>
+        ) : null}
+        {mode === 'snippet' ? (
+          <button
+            type="button"
+            className="capture-omni__inline-action"
+            onClick={() => void pasteClipboardText('snippet')}
+          >
+            Paste from clipboard
+          </button>
+        ) : null}
+      </div>
+
+      {showDetails ? (
+        <div className="capture-omni__details">
+          {mode === 'link' ? (
+            <div className="capture-metadata-grid" aria-label="Link metadata">
+              <label htmlFor="link-title-input">Title</label>
+              <input
+                id="link-title-input"
+                value={linkTitleValue}
+                onChange={(event) => setLinkTitleValue(event.target.value)}
+                placeholder="Optional display title"
+              />
+              <label htmlFor="link-tags-input">Tags</label>
+              <input
+                id="link-tags-input"
+                value={linkTagsValue}
+                onChange={(event) => setLinkTagsValue(event.target.value)}
+                placeholder="link, intake"
+              />
+            </div>
+          ) : null}
+          {mode === 'snippet' ? (
+            <div className="capture-metadata-grid" aria-label="Snippet metadata">
+              <label htmlFor="snippet-title-input">Title</label>
+              <input
+                id="snippet-title-input"
+                value={snippetTitleValue}
+                onChange={(event) => setSnippetTitleValue(event.target.value)}
+                placeholder="Optional display title"
+              />
+              <label htmlFor="snippet-tags-input">Tags</label>
+              <input
+                id="snippet-tags-input"
+                value={snippetTagsValue}
+                onChange={(event) => setSnippetTagsValue(event.target.value)}
+                placeholder="snippet, intake"
+              />
+            </div>
+          ) : null}
+          {mode === 'image' ? (
+            <div className="capture-metadata-grid" aria-label="Image metadata">
+              <label htmlFor="image-tags-input">Tags</label>
+              <input
+                id="image-tags-input"
+                value={imageTagsValue}
+                onChange={(event) => setImageTagsValue(event.target.value)}
+                placeholder="image, intake"
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <p className="capture-message" role="status">
         {message}
       </p>
     </SurfaceCard>
-  );
-}
-
-interface CaptureTileProps {
-  mode: Exclude<CaptureMode, null>;
-  activeMode: CaptureMode;
-  onActivate: () => void;
-  icon: ReactNode;
-  iconClass: string;
-  title: string;
-  subtitle: string;
-  shortcut: string[];
-  shortcutLabel: string;
-  className?: string;
-  children: ReactNode;
-  onDragOver?: (event: DragEvent) => void;
-  onDrop?: (event: DragEvent) => void;
-}
-
-function CaptureTile({
-  mode,
-  activeMode,
-  onActivate,
-  icon,
-  iconClass,
-  title,
-  subtitle,
-  shortcut,
-  shortcutLabel,
-  className = '',
-  children,
-  onDragOver,
-  onDrop
-}: CaptureTileProps) {
-  const expanded = activeMode === mode;
-  const collapsed = activeMode !== null && !expanded;
-
-  if (collapsed) {
-    return null;
-  }
-
-  if (expanded) {
-    return (
-      <div
-        className={`capture-action-tile capture-action-tile--expanded ${className}`.trim()}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-      >
-        <div className="capture-action-tile__form">{children}</div>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className={`capture-action-tile ${className}`.trim()}
-      aria-expanded={false}
-      onClick={onActivate}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
-      <span className={`tile-icon ${iconClass}`} aria-hidden="true">
-        {icon}
-      </span>
-      <span className="capture-action-tile__copy">
-        <strong>{title}</strong>
-        <span>{subtitle}</span>
-        <CommandKey keys={shortcut} label={shortcutLabel} />
-      </span>
-    </button>
   );
 }
 

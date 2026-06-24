@@ -37,8 +37,10 @@ describe('createMemoryScreenieRepository', () => {
     });
     expect(item.projectId).toBe(created.id);
 
-    await repository.removeProject(created.id);
+    const affectedItems = await repository.removeProject(created.id);
     const updated = await repository.get(item.id);
+    expect(affectedItems).toHaveLength(1);
+    expect(affectedItems[0].id).toBe(item.id);
     expect(updated?.projectId).toBeUndefined();
   });
 
@@ -231,5 +233,32 @@ describe('screenieRepository IndexedDB migrations', () => {
     await resetDemo();
     expect(await screenieRepository.list()).toHaveLength(seedItems.length);
     expect(await screenieRepository.listProjects()).toHaveLength(seedProjects.length);
+  });
+
+  it('returns items affected by IndexedDB project deletion', async () => {
+    await screenieRepository.clear();
+    const project = await screenieRepository.createProject({
+      name: 'Temporary project',
+      now: '2026-06-10T12:00:00.000Z'
+    });
+    const assignedItem = await screenieRepository.create({
+      type: 'snippet',
+      title: 'Assigned note',
+      text: 'Project will be removed.',
+      projectId: project.id,
+      now: '2026-06-10T12:30:00.000Z'
+    });
+
+    const affectedItems = await screenieRepository.removeProject(project.id);
+
+    expect(affectedItems).toHaveLength(1);
+    expect(affectedItems[0]).toMatchObject({
+      id: assignedItem.id,
+      projectId: undefined
+    });
+    expect(await screenieRepository.get(assignedItem.id)).toMatchObject({
+      id: assignedItem.id,
+      projectId: undefined
+    });
   });
 });

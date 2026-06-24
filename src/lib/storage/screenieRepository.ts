@@ -10,6 +10,7 @@ import {
   type ScreenieRepository,
   type UpdateSavedItemInput
 } from '../../domain/savedItem';
+import type { CaptureTemplate } from '../../domain/captureTemplate';
 import { createWorkspaceSnapshot, normalizeWorkspaceSnapshot } from '../../domain/workspaceSnapshot';
 import { seedItems, seedProjects } from './seedData';
 
@@ -34,10 +35,14 @@ interface ScreenieDb extends DBSchema {
     key: string;
     value: { key: string; value: string };
   };
+  templates: {
+    key: string;
+    value: CaptureTemplate;
+  };
 }
 
 const DB_NAME = 'screenie-local';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const META_SEEDED_KEY = 'seeded';
 const META_DEMO_DISABLED_KEY = 'demo-seed-disabled';
 
@@ -135,16 +140,19 @@ export const screenieRepository: ScreenieRepository = {
   async removeProject(id: string) {
     const db = await getDb();
     const items = await db.getAll('items');
+    const affected: SavedItem[] = [];
 
     const transaction = db.transaction(['items', 'projects'], 'readwrite');
     for (const item of items) {
       if (item.projectId === id) {
         const updated = updateSavedItem(item, { projectId: null });
         await transaction.objectStore('items').put(updated);
+        affected.push(updated);
       }
     }
     await transaction.objectStore('projects').delete(id);
     await transaction.done;
+    return affected;
   },
 
   async exportWorkspace(now?: string) {
@@ -190,15 +198,32 @@ export const screenieRepository: ScreenieRepository = {
 
   async clear() {
     const db = await getDb();
-    const transaction = db.transaction(['items', 'projects', 'meta'], 'readwrite');
+    const transaction = db.transaction(['items', 'projects', 'meta', 'templates'], 'readwrite');
     const meta = transaction.objectStore('meta');
 
     await transaction.objectStore('items').clear();
     await transaction.objectStore('projects').clear();
+    await transaction.objectStore('templates').clear();
     await meta.clear();
     await meta.put({ key: META_SEEDED_KEY, value: 'true' });
     await meta.put({ key: META_DEMO_DISABLED_KEY, value: 'true' });
     await transaction.done;
+  },
+
+  async listTemplates() {
+    const db = await getDb();
+    return sortTemplates(await db.getAll('templates'));
+  },
+
+  async saveTemplate(template: CaptureTemplate) {
+    const db = await getDb();
+    await db.put('templates', template);
+    return template;
+  },
+
+  async deleteTemplate(id: string) {
+    const db = await getDb();
+    await db.delete('templates', id);
   }
 };
 
@@ -246,6 +271,10 @@ function getDb() {
 
       if (oldVersion < 3) {
         await migrateItemsToVersion3(transaction.objectStore('items'));
+      }
+
+      if (oldVersion < 4 && !db.objectStoreNames.contains('templates')) {
+        db.createObjectStore('templates', { keyPath: 'id' });
       }
     }
   });
@@ -315,4 +344,8 @@ function sortNewest(items: SavedItem[]): SavedItem[] {
 
 function sortProjects(projects: Project[]): Project[] {
   return [...projects].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function sortTemplates(templates: CaptureTemplate[]): CaptureTemplate[] {
+  return [...templates].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
 }

@@ -1,3 +1,5 @@
+import type { CaptureTemplate } from './captureTemplate';
+
 export type SavedItemType = 'link' | 'screenshot' | 'snippet' | 'image';
 export type SavedItemStatus = 'active' | 'trash';
 export type SavedItemSource = 'manual' | 'upload' | 'paste' | 'extension' | 'import' | 'seed';
@@ -126,12 +128,15 @@ export interface ScreenieRepository {
   listProjects(): Promise<Project[]>;
   createProject(input: CreateProjectInput): Promise<Project>;
   renameProject(id: string, name: string): Promise<Project>;
-  removeProject(id: string): Promise<void>;
+  removeProject(id: string): Promise<SavedItem[]>;
   exportWorkspace(now?: string): Promise<WorkspaceSnapshot>;
   importWorkspace(snapshot: WorkspaceSnapshot): Promise<void>;
   resetDemo(): Promise<void>;
   seed(items: SavedItem[], projects?: Project[]): Promise<void>;
   clear(): Promise<void>;
+  listTemplates(): Promise<CaptureTemplate[]>;
+  saveTemplate(template: CaptureTemplate): Promise<CaptureTemplate>;
+  deleteTemplate(id: string): Promise<void>;
 }
 
 export function createProject(input: CreateProjectInput): Project {

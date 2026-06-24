@@ -1,27 +1,5 @@
 import type { SavedItem } from '../domain/savedItem';
 
-const MSHOTS_BASE_URL = 'https://s.wordpress.com/mshots/v1/';
-const LINK_SCREENSHOT_WIDTH = 900;
-
-export function getLinkScreenshotUrl(url: string | undefined): string | undefined {
-  if (!url) {
-    return undefined;
-  }
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(url);
-  } catch {
-    return undefined;
-  }
-
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    return undefined;
-  }
-
-  return `${MSHOTS_BASE_URL}${encodeURIComponent(parsedUrl.toString())}?w=${LINK_SCREENSHOT_WIDTH}`;
-}
-
 export function getSavedItemPreviewImage(
   item: Pick<SavedItem, 'type' | 'url' | 'imageDataUrl'>
 ): string | undefined {
@@ -29,9 +7,33 @@ export function getSavedItemPreviewImage(
     return item.imageDataUrl;
   }
 
-  if (item.type === 'link') {
-    return getLinkScreenshotUrl(item.url);
+  return undefined;
+}
+
+/**
+ * Derives a short, human-friendly brand/company name from a URL so link cards
+ * can show a clean label instead of fetching a remote screenshot. Falls back to
+ * the raw hostname, then the original string, when parsing fails.
+ */
+export function getLinkLabel(url: string | undefined): string {
+  if (!url) {
+    return 'Link';
   }
 
-  return undefined;
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return url.replace(/^https?:\/\//i, '').split('/')[0] || 'Link';
+  }
+
+  const host = hostname.replace(/^www\./i, '');
+  const segments = host.split('.').filter(Boolean);
+
+  if (segments.length === 0) {
+    return 'Link';
+  }
+
+  const brand = segments.length >= 2 ? segments[segments.length - 2] : segments[0];
+  return brand.charAt(0).toUpperCase() + brand.slice(1);
 }
